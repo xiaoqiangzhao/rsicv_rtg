@@ -168,7 +168,11 @@ class Instruction:
             if self.name in ['slli', 'srli', 'srai']:
                 shamt = imm & 0x1f  # only lower 5 bits
                 return f"{self.name} {reg_name(rd)}, {reg_name(rs1)}, {shamt}"
+            # Handle load instructions (lb, lh, lw, lbu, lhu) and jalr
+            elif self.name in ['lb', 'lh', 'lw', 'lbu', 'lhu', 'jalr']:
+                return f"{self.name} {reg_name(rd)}, {imm}({reg_name(rs1)})"
             else:
+                # Regular I-type: addi, xori, ori, andi, slti, sltiu
                 return f"{self.name} {reg_name(rd)}, {reg_name(rs1)}, {imm}"
         elif self.format == InstructionFormat.S:
             return f"{self.name} {reg_name(rs2)}, {imm}({reg_name(rs1)})"
@@ -188,9 +192,22 @@ class Instruction:
 class RISCVISA:
     """RISC-V instruction set definition and generator."""
 
-    def __init__(self):
+    def __init__(self, weights: Optional[Dict[str, float]] = None):
         self.instructions: List[Instruction] = []
         self._load_instructions()
+
+        # Initialize weights: default is 1.0 for all instructions
+        self.weights: Dict[str, float] = {}
+        for instr in self.instructions:
+            self.weights[instr.name] = 1.0
+
+        # Update with any provided weights
+        if weights:
+            for name, weight in weights.items():
+                if name in self.weights:
+                    self.weights[name] = weight
+                else:
+                    raise ValueError(f"Unknown instruction '{name}' in weights")
 
     def _load_instructions(self):
         """Load common RV32I instructions."""
@@ -268,8 +285,40 @@ class RISCVISA:
         ])
 
     def get_random_instruction(self) -> Instruction:
-        """Return a random instruction from the ISA."""
-        return random.choice(self.instructions)
+        """Return a random instruction from the ISA using weighted selection."""
+        # Get weights for all instructions in order
+        weights = [self.weights[instr.name] for instr in self.instructions]
+        return random.choices(self.instructions, weights=weights, k=1)[0]
+
+    def get_weighted_random_from_list(self, instruction_list: List[Instruction]) -> Instruction:
+        """Return a random instruction from a subset using weighted selection."""
+        if not instruction_list:
+            raise ValueError("Instruction list cannot be empty")
+        # Get weights for the provided instructions
+        weights = [self.weights[instr.name] for instr in instruction_list]
+        return random.choices(instruction_list, weights=weights, k=1)[0]
+
+    def set_weight_by_name(self, name: str, weight: float):
+        """Set weight for a specific instruction by name."""
+        if name not in self.weights:
+            raise ValueError(f"Unknown instruction '{name}'")
+        if weight < 0:
+            raise ValueError(f"Weight must be non-negative, got {weight}")
+        self.weights[name] = weight
+
+    def set_weight_by_format(self, fmt: InstructionFormat, weight: float):
+        """Set weight for all instructions of a given format."""
+        if weight < 0:
+            raise ValueError(f"Weight must be non-negative, got {weight}")
+        for instr in self.instructions:
+            if instr.format == fmt:
+                self.weights[instr.name] = weight
+
+    def get_weight(self, name: str) -> float:
+        """Get weight for a specific instruction."""
+        if name not in self.weights:
+            raise ValueError(f"Unknown instruction '{name}'")
+        return self.weights[name]
 
     def generate_random(self, count: int = 1) -> List[Tuple[int, str]]:
         """Generate `count` random instructions.

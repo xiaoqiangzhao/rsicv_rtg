@@ -87,10 +87,37 @@ def example4():
     print("Saved to 'generated_instructions.txt'")
 
 
+def example5():
+    """Weighted random generation."""
+    print("\n=== Example 5: Weighted Generation ===")
+    isa = RISCVISA()
+
+    # Set weights: favor R-type, reduce I-type, eliminate special
+    isa.set_weight_by_format(InstructionFormat.R, 2.5)
+    isa.set_weight_by_format(InstructionFormat.I, 0.7)
+    isa.set_weight_by_name("ecall", 0.0)
+    isa.set_weight_by_name("ebreak", 0.0)
+
+    print("Weights applied:")
+    print("  R-type: 2.5")
+    print("  I-type: 0.7")
+    print("  ecall/ebreak: 0.0 (eliminated)")
+    print("  Others: 1.0 (default)")
+
+    # Generate some instructions
+    results = isa.generate_random(10)
+
+    print("\nGenerated instructions:")
+    for i, (encoded, asm) in enumerate(results):
+        instr_name = asm.split()[0] if asm else "unknown"
+        print(f"  {i+1:2d}. {instr_name:6} {asm}")
+
+
 if __name__ == '__main__':
     example1()
     example2()
     example3()
     example4()
+    example5()
 
     print("\n=== Done ===")

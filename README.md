@@ -6,8 +6,10 @@ A Python 3 tool for generating random RISC-V instructions. Useful for testing RI
 
 - Generates random RISC-V RV32I instructions
 - Supports all instruction formats: R, I, S, B, U, J
-- Output in multiple formats: hexadecimal, binary, assembly, or all
+- Output in multiple formats: hexadecimal, binary, assembly, hex+asm, or all
 - Filter by instruction format
+- Weighted random generation by instruction type
+- PC (program counter) comments in assembly output
 - Reproducible generation with seed support
 - Lists all available instructions
 
@@ -53,7 +55,8 @@ python -m generator -n 5 -f asm
 - `hex`: Hexadecimal representation (default)
 - `bin`: 32-bit binary representation
 - `asm`: Assembly syntax
-- `all`: All of the above
+- `hexasm`: Hexadecimal followed by assembly (useful for debugging)
+- `all`: All of the above (hex, binary, assembly)
 
 Example:
 
@@ -78,6 +81,53 @@ Use a seed for reproducible output:
 ```bash
 python -m generator -s 42
 ```
+
+### PC Comments in Assembly
+
+Include program counter (PC) comments in assembly output:
+
+```bash
+# Add PC comments with default base address (0x0)
+python -m generator --pc-comments -f asm
+
+# Specify custom base address
+python -m generator --pc-comments --base-address 0x1000 -f asm
+
+# PC comments work with hexasm and all formats too
+python -m generator --pc-comments -f hexasm
+```
+
+### Weighted generation
+
+Control the probability of different instruction types using weights:
+
+```bash
+# Increase probability of R-type instructions (weight 2.0)
+python -m generator --weight-r 2.0
+
+# Decrease probability of I-type instructions (weight 0.5)
+python -m generator --weight-i 0.5
+
+# Eliminate R-type instructions (weight 0.0)
+python -m generator --weight-r 0.0
+
+# Increase probability of special instructions (ecall, ebreak)
+python -m generator --weight-special 5.0
+
+# Combine multiple weights
+python -m generator --weight-r 2.0 --weight-i 0.5 --weight-b 1.5
+```
+
+Available weight arguments:
+- `--weight-r`: R-type instructions
+- `--weight-i`: I-type instructions
+- `--weight-s`: S-type instructions
+- `--weight-b`: B-type instructions
+- `--weight-u`: U-type instructions
+- `--weight-j`: J-type instructions
+- `--weight-special`: Special instructions (ecall, ebreak)
+
+Default weight for all instructions is 1.0. Weights are relative probabilities.
 
 ### List available instructions
 
@@ -104,6 +154,18 @@ python -m generator --by-format S -f bin
 
 # Generate mixed instructions with seed for reproducibility
 python -m generator -n 20 -s 12345 -f all -o output.txt
+
+# Weighted generation: more R-type, fewer I-type instructions
+python -m generator -n 50 --weight-r 2.5 --weight-i 0.8
+
+# Eliminate special instructions (ecall, ebreak)
+python -m generator -n 100 --weight-special 0.0
+
+# Generate instructions with hex and assembly output (new hexasm format)
+python -m generator -n 10 -f hexasm
+
+# Generate assembly with PC comments starting at 0x1000
+python -m generator -n 10 --pc-comments --base-address 0x1000 -f asm
 ```
 
 ## Project Structure
