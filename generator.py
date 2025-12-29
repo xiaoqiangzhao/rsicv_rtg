@@ -226,6 +226,11 @@ def main():
         "--load-store-offset-max", type=lambda x: int(x, 0), default=2047,
         help="Maximum offset for load/store instructions (default: 2047)"
     )
+    # Hexasm format arguments
+    parser.add_argument(
+        "--no-hex-comments", action="store_true", default=False,
+        help="Disable hex as comment in hexasm format (hex appears as field)"
+    )
 
     # Parse all arguments (known args) to get config path and any CLI arguments
     initial_args, remaining_argv = parser.parse_known_args()
@@ -405,7 +410,12 @@ def main():
         elif args.format == "asm":
             output_lines.append(asm_with_pc)
         elif args.format == "hexasm":
-            output_lines.append(f"{format_hex(encoded)} {asm_with_pc}")
+            if args.no_hex_comments:
+                # Old format: hex as field
+                output_lines.append(f"{format_hex(encoded)} {asm_with_pc}")
+            else:
+                # New format: hex as comment
+                output_lines.append(f"{asm_with_pc}  # {format_hex(encoded)}")
         elif args.format == "all":
             output_lines.append(f"{format_hex(encoded)} {format_binary(encoded)} {asm_with_pc}")
 

@@ -57,7 +57,7 @@ python -m generator -n 5 -f asm
 - `hex`: Hexadecimal representation (default)
 - `bin`: 32-bit binary representation
 - `asm`: Assembly syntax
-- `hexasm`: Hexadecimal followed by assembly (useful for debugging)
+- `hexasm`: Assembly with hexadecimal as comment (useful for debugging). Use `--no-hex-comments` to show hex as a field instead.
 - `all`: All of the above (hex, binary, assembly)
 
 Example:
@@ -236,8 +236,11 @@ python -m generator -n 50 --weight-r 2.5 --weight-i 0.8
 # Eliminate special instructions (ecall, ebreak)
 python -m generator -n 100 --weight-special 0.0
 
-# Generate instructions with hex and assembly output (new hexasm format)
+# Generate instructions with hex as comment (hexasm format)
 python -m generator -n 10 -f hexasm
+
+# Generate hexasm with hex as field (old behavior)
+python -m generator -n 5 -f hexasm --no-hex-comments
 
 # Generate assembly with PC comments starting at 0x1000
 python -m generator -n 10 --pc-comments --base-address 0x1000 -f asm
