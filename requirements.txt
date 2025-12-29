@@ -1,0 +1,3 @@
+# No external dependencies required for basic functionality
+# For testing:
+# pytest>=6.0
