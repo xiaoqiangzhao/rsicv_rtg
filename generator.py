@@ -9,7 +9,7 @@ import sys
 import yaml
 from typing import List, Tuple
 from riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
-from patterns import PatternGenerator
+from patterns import PatternGenerator, SemanticState, CommentGenerator
 
 
 def generate_instructions(count: int, output_format: str, seed: int = None) -> List[Tuple[int, str]]:
@@ -217,6 +217,23 @@ def main():
         "--pattern-density", type=float, default=0.3,
         help="Density of patterns in mixed generation (0.0-1.0) (default: 0.3)"
     )
+    # Semantic correlation arguments
+    parser.add_argument(
+        "--semantic-correlation", action="store_true", default=False,
+        help="Enable semantic correlation in instruction generation"
+    )
+    parser.add_argument(
+        "--semantic-comments", action="store_true", default=False,
+        help="Enable semantic comments in output"
+    )
+    parser.add_argument(
+        "--comment-detail", choices=["minimal", "medium", "detailed"], default="medium",
+        help="Detail level for semantic comments (default: medium)"
+    )
+    parser.add_argument(
+        "--correlation-types", type=str, default="data,control,memory,function",
+        help="Comma-separated list of correlation types: data,control,memory,function (default: all)"
+    )
     # Address range arguments for load/store instructions
     parser.add_argument(
         "--load-store-offset-min", type=lambda x: int(x, 0), default=-2048,
@@ -296,8 +313,21 @@ def main():
             except ValueError:
                 pass  # Instruction might not exist (shouldn't happen)
 
-    # Create pattern generator
-    pattern_gen = PatternGenerator(isa)
+    # Parse correlation types
+    correlation_types_list = [t.strip() for t in args.correlation_types.split(',')] if hasattr(args, 'correlation_types') else []
+
+    # Create semantic state if semantic correlation or comments enabled
+    semantic_state = None
+    if args.semantic_correlation or args.semantic_comments:
+        semantic_state = SemanticState()
+
+    # Set comment detail level (use "none" if semantic comments disabled)
+    comment_detail = args.comment_detail if args.semantic_comments else "none"
+
+    # Create pattern generator with semantic features
+    pattern_gen = PatternGenerator(isa,
+                                   semantic_state=semantic_state,
+                                   comment_detail=comment_detail)
 
     # Filter by format if requested
     if args.by_format:

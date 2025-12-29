@@ -48,3 +48,16 @@ weights:
   u: 1.0      # U-type instructions
   j: 1.0      # J-type instructions
   special: 0.0  # Special instructions (ecall, ebreak)
+
+# Semantic correlation settings
+# Enable semantic correlation in instruction generation
+semantic_correlation: false
+
+# Enable semantic comments in output
+semantic_comments: false
+
+# Detail level for semantic comments: none, minimal, medium, detailed
+comment_detail: "medium"
+
+# Comma-separated list of correlation types: data, control, memory, function
+correlation_types: "data,control,memory,function"
