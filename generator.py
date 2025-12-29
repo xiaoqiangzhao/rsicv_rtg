@@ -8,6 +8,7 @@ import random
 import sys
 from typing import List, Tuple
 from riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
+from patterns import PatternGenerator
 
 
 def generate_instructions(count: int, output_format: str, seed: int = None) -> List[Tuple[int, str]]:
@@ -85,12 +86,32 @@ def main():
         "--weight-special", type=float, default=1.0,
         help="Weight for special instructions (ecall, ebreak) (default: 1.0)"
     )
+    # Pattern generation arguments
+    parser.add_argument(
+        "--pattern", type=str, choices=["random", "load-store", "raw", "war", "waw", "basic-block", "mixed"],
+        default="random",
+        help="Instruction pattern to generate (default: random)"
+    )
+    parser.add_argument(
+        "--pattern-density", type=float, default=0.3,
+        help="Density of patterns in mixed generation (0.0-1.0) (default: 0.3)"
+    )
+    # Address range arguments for load/store instructions
+    parser.add_argument(
+        "--load-store-offset-min", type=lambda x: int(x, 0), default=-2048,
+        help="Minimum offset for load/store instructions (default: -2048)"
+    )
+    parser.add_argument(
+        "--load-store-offset-max", type=lambda x: int(x, 0), default=2047,
+        help="Maximum offset for load/store instructions (default: 2047)"
+    )
 
     args = parser.parse_args()
 
     # Handle list-instructions
     if args.list_instructions:
-        isa = RISCVISA()
+        isa = RISCVISA(load_store_offset_min=args.load_store_offset_min,
+                       load_store_offset_max=args.load_store_offset_max)
         print(f"Total instructions: {len(isa.instructions)}")
         for instr in isa.instructions:
             print(f"  {instr.name:8} {instr.format.value:4} opcode={instr.opcode:07b}")
@@ -100,7 +121,8 @@ def main():
     if args.seed is not None:
         random.seed(args.seed)
 
-    isa = RISCVISA()
+    isa = RISCVISA(load_store_offset_min=args.load_store_offset_min,
+                   load_store_offset_max=args.load_store_offset_max)
 
     # Apply weights based on command-line arguments
     if args.weight_r != 1.0:
@@ -124,6 +146,9 @@ def main():
             except ValueError:
                 pass  # Instruction might not exist (shouldn't happen)
 
+    # Create pattern generator
+    pattern_gen = PatternGenerator(isa)
+
     # Filter by format if requested
     if args.by_format:
         fmt_map = {"R": InstructionFormat.R, "I": InstructionFormat.I,
@@ -137,12 +162,86 @@ def main():
     else:
         instructions = isa.instructions
 
-    # Generate
+    # Generate based on pattern
     results = []
-    for _ in range(args.count):
-        instr = isa.get_weighted_random_from_list(instructions)
-        encoded, asm = instr.generate_random()
-        results.append((encoded, asm))
+
+    if args.pattern == "random":
+        # Use existing random generation with format filtering
+        for _ in range(args.count):
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = instr.generate_random()
+            results.append((encoded, asm))
+
+    elif args.pattern == "load-store":
+        # Generate load-store pairs
+        pairs_needed = args.count // 2
+        extra_needed = args.count % 2
+
+        for _ in range(pairs_needed):
+            pair = pattern_gen.generate_load_store_pair()
+            results.extend(pair)
+
+        # Add extra random instructions if count is odd
+        for _ in range(extra_needed):
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = instr.generate_random()
+            results.append((encoded, asm))
+
+    elif args.pattern == "raw":
+        # Generate RAW hazard pairs
+        pairs_needed = args.count // 2
+        extra_needed = args.count % 2
+
+        for _ in range(pairs_needed):
+            pair = pattern_gen.generate_raw_hazard()
+            results.extend(pair)
+
+        for _ in range(extra_needed):
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = instr.generate_random()
+            results.append((encoded, asm))
+
+    elif args.pattern == "war":
+        # Generate WAR hazard pairs
+        pairs_needed = args.count // 2
+        extra_needed = args.count % 2
+
+        for _ in range(pairs_needed):
+            pair = pattern_gen.generate_war_hazard()
+            results.extend(pair)
+
+        for _ in range(extra_needed):
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = instr.generate_random()
+            results.append((encoded, asm))
+
+    elif args.pattern == "waw":
+        # Generate WAW hazard pairs
+        pairs_needed = args.count // 2
+        extra_needed = args.count % 2
+
+        for _ in range(pairs_needed):
+            pair = pattern_gen.generate_waw_hazard()
+            results.extend(pair)
+
+        for _ in range(extra_needed):
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = instr.generate_random()
+            results.append((encoded, asm))
+
+    elif args.pattern == "basic-block":
+        # Generate basic block
+        block = pattern_gen.generate_basic_block(args.count)
+        results.extend(block)
+
+    elif args.pattern == "mixed":
+        # Generate mixed patterns
+        patterns_list = ['load_store', 'raw', 'war', 'waw']
+        mixed = pattern_gen.generate_mixed_patterns(args.count, patterns_list, density=args.pattern_density)
+        results.extend(mixed)
+
+    # Ensure we have exactly count instructions (in case pattern generation gave wrong number)
+    results = results[:args.count]
 
     # Output
     output_lines = []

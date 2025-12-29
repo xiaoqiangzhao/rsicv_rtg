@@ -1,0 +1,20 @@
+srli x2, x8, 26
+bltu x22, x14, -304
+lb x22, -7(x19)
+jalr x3, -675(x31)
+srai x22, x31, 21
+sw x15, 10(x11)
+sll x16, x23, x9
+and x31, x13, x25
+lhu x12, -5(x24)
+slli x20, x21, 1
+srli x14, x22, 12
+ori x17, x2, 1735
+lh x8, 1(x6)
+addi x4, x31, 1531
+addi x3, x28, 1532
+sh x7, -8(x11)
+bne x13, x1, -2678
+lbu x8, 0(x25)
+add x6, x18, x6
+beq x13, x17, -3652

@@ -129,6 +129,30 @@ Available weight arguments:
 
 Default weight for all instructions is 1.0. Weights are relative probabilities.
 
+### Load/Store Address Range Control
+
+Control the offset range for load and store instructions (lb, lh, lw, lbu, lhu, sb, sh, sw):
+
+```bash
+# Generate load/store instructions with offsets between -100 and 100
+python -m generator --load-store-offset-min -100 --load-store-offset-max 100
+
+# Use hexadecimal values for address ranges
+python -m generator --load-store-offset-min 0x0 --load-store-offset-max 0xfff
+
+# Generate load-store pattern with restricted offset range
+python -m generator --pattern load-store --load-store-offset-min -50 --load-store-offset-max 50
+
+# Combine with other options
+python -m generator --pattern mixed --load-store-offset-min -500 --load-store-offset-max 500 -f asm
+```
+
+Arguments:
+- `--load-store-offset-min`: Minimum offset for load/store instructions (default: -2048)
+- `--load-store-offset-max`: Maximum offset for load/store instructions (default: 2047)
+
+Note: Offsets are 12-bit signed immediates in RISC-V. Values outside the range -2048..2047 will be truncated when encoded. Other instruction types (addi, xori, etc.) use their own default immediate ranges.
+
 ### List available instructions
 
 Show all supported instructions:
@@ -166,6 +190,9 @@ python -m generator -n 10 -f hexasm
 
 # Generate assembly with PC comments starting at 0x1000
 python -m generator -n 10 --pc-comments --base-address 0x1000 -f asm
+
+# Load/store instructions with restricted offset range
+python -m generator --pattern load-store --load-store-offset-min -100 --load-store-offset-max 100 -f asm
 ```
 
 ## Project Structure

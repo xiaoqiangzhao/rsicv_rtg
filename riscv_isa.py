@@ -192,7 +192,13 @@ class Instruction:
 class RISCVISA:
     """RISC-V instruction set definition and generator."""
 
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
+    def __init__(self, weights: Optional[Dict[str, float]] = None,
+                 load_store_offset_min: int = -2048,
+                 load_store_offset_max: int = 2047):
+        if load_store_offset_min > load_store_offset_max:
+            raise ValueError(f"load_store_offset_min ({load_store_offset_min}) > load_store_offset_max ({load_store_offset_max})")
+        self.load_store_offset_min = load_store_offset_min
+        self.load_store_offset_max = load_store_offset_max
         self.instructions: List[Instruction] = []
         self._load_instructions()
 
@@ -228,6 +234,7 @@ class RISCVISA:
         # I-type instructions (with immediates)
         def imm_12bit(): return random.randint(-2048, 2047)
         def imm_5bit(): return random.randint(0, 31)
+        def imm_load_store(): return random.randint(self.load_store_offset_min, self.load_store_offset_max)
 
         self.instructions.extend([
             Instruction("addi", InstructionFormat.I, 0b0010011, 0b000, imm_gen=imm_12bit),
@@ -239,19 +246,19 @@ class RISCVISA:
             Instruction("srai", InstructionFormat.I, 0b0010011, 0b101, 0b0100000, imm_gen=imm_5bit),
             Instruction("slti", InstructionFormat.I, 0b0010011, 0b010, imm_gen=imm_12bit),
             Instruction("sltiu", InstructionFormat.I, 0b0010011, 0b011, imm_gen=imm_12bit),
-            Instruction("lb", InstructionFormat.I, 0b0000011, 0b000, imm_gen=imm_12bit),
-            Instruction("lh", InstructionFormat.I, 0b0000011, 0b001, imm_gen=imm_12bit),
-            Instruction("lw", InstructionFormat.I, 0b0000011, 0b010, imm_gen=imm_12bit),
-            Instruction("lbu", InstructionFormat.I, 0b0000011, 0b100, imm_gen=imm_12bit),
-            Instruction("lhu", InstructionFormat.I, 0b0000011, 0b101, imm_gen=imm_12bit),
+            Instruction("lb", InstructionFormat.I, 0b0000011, 0b000, imm_gen=imm_load_store),
+            Instruction("lh", InstructionFormat.I, 0b0000011, 0b001, imm_gen=imm_load_store),
+            Instruction("lw", InstructionFormat.I, 0b0000011, 0b010, imm_gen=imm_load_store),
+            Instruction("lbu", InstructionFormat.I, 0b0000011, 0b100, imm_gen=imm_load_store),
+            Instruction("lhu", InstructionFormat.I, 0b0000011, 0b101, imm_gen=imm_load_store),
             Instruction("jalr", InstructionFormat.I, 0b1100111, 0b000, imm_gen=imm_12bit),
         ])
 
         # S-type instructions
         self.instructions.extend([
-            Instruction("sb", InstructionFormat.S, 0b0100011, 0b000, imm_gen=imm_12bit),
-            Instruction("sh", InstructionFormat.S, 0b0100011, 0b001, imm_gen=imm_12bit),
-            Instruction("sw", InstructionFormat.S, 0b0100011, 0b010, imm_gen=imm_12bit),
+            Instruction("sb", InstructionFormat.S, 0b0100011, 0b000, imm_gen=imm_load_store),
+            Instruction("sh", InstructionFormat.S, 0b0100011, 0b001, imm_gen=imm_load_store),
+            Instruction("sw", InstructionFormat.S, 0b0100011, 0b010, imm_gen=imm_load_store),
         ])
 
         # B-type instructions

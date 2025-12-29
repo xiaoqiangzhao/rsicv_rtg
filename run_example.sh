@@ -33,7 +33,10 @@ echo "7. Weighted generation (favor R-type, reduce I-type):"
 python3 generator.py -n 5 --weight-r 2.5 --weight-i 0.7 -f asm
 echo
 
-echo "8. Reproducible generation with seed 999:"
+echo "8. Load/store offset range control:"
+python3 generator.py --pattern load-store --load-store-offset-min -50 --load-store-offset-max 50 -f asm
+echo
+echo "9. Reproducible generation with seed 999:"
 python3 generator.py -n 2 -s 999 -f all
 echo
 
