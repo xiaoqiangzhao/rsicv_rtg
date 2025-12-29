@@ -1,3 +1,5 @@
-# No external dependencies required for basic functionality
+# Core dependencies
+PyYAML>=6.0
+
 # For testing:
 # pytest>=6.0

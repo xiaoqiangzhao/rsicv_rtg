@@ -6,6 +6,7 @@ RISC-V Random Instruction Generator CLI.
 import argparse
 import random
 import sys
+import yaml
 from typing import List, Tuple
 from riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
 from patterns import PatternGenerator
@@ -20,10 +21,130 @@ def generate_instructions(count: int, output_format: str, seed: int = None) -> L
     return isa.generate_random(count)
 
 
+def load_config(config_path: str) -> dict:
+    """Load YAML configuration file and return as dictionary.
+
+    Args:
+        config_path: Path to YAML configuration file
+
+    Returns:
+        Dictionary with configuration values
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        yaml.YAMLError: If YAML syntax is invalid
+    """
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        return config if config else {}
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML syntax in {config_path}: {e}")
+
+
+def validate_and_convert_config(config: dict) -> dict:
+    """Validate config values and convert types to match argparse expectations.
+
+    Handles type conversions for hex strings, floats, and nested weight dictionary.
+
+    Args:
+        config: Raw configuration dictionary from YAML
+
+    Returns:
+        Validated and converted configuration dictionary
+    """
+    if not config:
+        return {}
+
+    validated = {}
+
+    # Helper for hex/decimal conversion matching argparse's lambda x: int(x, 0)
+    def convert_int(value):
+        """Convert to int, handling hex strings (0x...) like argparse."""
+        if isinstance(value, str):
+            return int(value, 0)
+        return int(value)
+
+    # Convert known fields
+    int_fields = ['count', 'seed', 'base_address',
+                  'load_store_offset_min', 'load_store_offset_max']
+    float_fields = ['pattern_density']
+
+    for key, value in config.items():
+        if value is None:
+            # Keep None values (e.g., seed: null)
+            validated[key] = None
+        elif key == 'weights' and isinstance(value, dict):
+            # Convert nested weights dictionary
+            validated[key] = {}
+            for weight_key, weight_val in value.items():
+                if weight_val is not None:
+                    validated[key][weight_key] = float(weight_val)
+        elif key in int_fields and value is not None:
+            validated[key] = convert_int(value)
+        elif key in float_fields and value is not None:
+            validated[key] = float(value)
+        else:
+            # Pass through other values (strings, booleans)
+            validated[key] = value
+
+    return validated
+
+
+def merge_config_with_args(config: dict, args: argparse.Namespace, defaults: dict = None) -> argparse.Namespace:
+    """Merge config dictionary with argparse Namespace.
+
+    Precedence: CLI arguments override config values.
+    Special handling for nested weights dictionary.
+
+    Args:
+        config: Validated configuration dictionary
+        args: argparse.Namespace from command-line parsing
+        defaults: Dictionary of default values for each argument (optional).
+                  If not provided, uses heuristic: assume CLI overrode if value != default.
+
+    Returns:
+        Updated argparse.Namespace with merged values
+    """
+    merged = argparse.Namespace(**vars(args))
+
+    # If defaults not provided, create empty dict
+    if defaults is None:
+        defaults = {}
+
+    # Flatten weights dictionary to individual weight_* attributes
+    if 'weights' in config:
+        weights = config.pop('weights')
+        for fmt, weight in weights.items():
+            attr_name = f'weight_{fmt}'
+            if hasattr(merged, attr_name):
+                # Check if CLI overrode this weight (i.e., value != default)
+                current = getattr(merged, attr_name)
+                if current == defaults.get(attr_name, 1.0):
+                    setattr(merged, attr_name, weight)
+
+    # Merge other fields
+    for key, value in config.items():
+        if value is not None and hasattr(merged, key):
+            # Check if CLI overrode this field (value != default)
+            current = getattr(merged, key)
+            if current == defaults.get(key):
+                setattr(merged, key, value)
+
+    return merged
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate random RISC-V instructions",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    # Configuration file argument (must be first to parse early)
+    parser.add_argument(
+        "--config", type=str, default=None,
+        help="Path to YAML configuration file (CLI arguments override config)"
     )
     parser.add_argument(
         "-n", "--count", type=int, default=10,
@@ -106,7 +227,31 @@ def main():
         help="Maximum offset for load/store instructions (default: 2047)"
     )
 
-    args = parser.parse_args()
+    # Parse all arguments (known args) to get config path and any CLI arguments
+    initial_args, remaining_argv = parser.parse_known_args()
+
+    config = {}
+    if initial_args.config:
+        try:
+            config = load_config(initial_args.config)
+            config = validate_and_convert_config(config)
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error loading config: {e}", file=sys.stderr)
+            return 1
+
+    # Use initial_args as base (contains CLI values)
+    args = initial_args
+
+    # Build dictionary of default values from parser
+    defaults = {}
+    for action in parser._actions:
+        if action.dest != "help" and action.default is not None:
+            defaults[action.dest] = action.default
+
+    # Merge config with args (CLI overrides config)
+    args = merge_config_with_args(config, args, defaults)
+
+    # Now args contains merged values (CLI overrides config)
 
     # Handle list-instructions
     if args.list_instructions:

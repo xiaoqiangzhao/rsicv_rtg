@@ -40,4 +40,8 @@ echo "9. Reproducible generation with seed 999:"
 python3 generator.py -n 2 -s 999 -f all
 echo
 
+echo "10. Configuration file example:"
+python3 generator.py --config example_config.yaml -n 3 -f asm
+echo
+
 echo "=== Demo complete ==="

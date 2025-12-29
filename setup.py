@@ -21,7 +21,7 @@ setup(
         "Topic :: System :: Hardware",
     ],
     python_requires=">=3.6",
-    install_requires=[],
+    install_requires=["PyYAML>=6.0"],
     entry_points={
         "console_scripts": [
             "riscv-rtg=generator:main",

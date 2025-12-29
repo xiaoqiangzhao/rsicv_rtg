@@ -24,6 +24,8 @@ cd riscv_rtg
 
 Install as a package:
 
+Note: Configuration file support requires PyYAML, which will be installed automatically.
+
 ```bash
 pip install -e .
 ```
@@ -153,6 +155,55 @@ Arguments:
 
 Note: Offsets are 12-bit signed immediates in RISC-V. Values outside the range -2048..2047 will be truncated when encoded. Other instruction types (addi, xori, etc.) use their own default immediate ranges.
 
+### Configuration Files
+
+You can use a YAML configuration file to manage command-line arguments. Command-line arguments override settings from the configuration file.
+
+Create a configuration file (e.g., `config.yaml`):
+
+```yaml
+# config.yaml - Example configuration
+count: 100
+format: "hexasm"
+seed: 42
+output: "instructions.txt"
+pc_comments: true
+base_address: 0x1000
+list_instructions: false
+by_format: null
+pattern: "mixed"
+pattern_density: 0.3
+load_store_offset_min: -100
+load_store_offset_max: 100
+
+# Weights as nested dictionary (maps to --weight-* args)
+weights:
+  r: 2.0
+  i: 0.5
+  s: 1.0
+  b: 1.5
+  u: 1.0
+  j: 1.0
+  special: 0.0
+```
+
+Use the configuration file with the `--config` argument:
+
+```bash
+# Load configuration and generate instructions
+python -m generator --config config.yaml
+
+# Override specific settings from command line
+python -m generator --config config.yaml --count 50 --pattern random
+
+# Combine with other CLI arguments (CLI overrides config)
+python -m generator --config config.yaml --weight-r 3.0 --output custom.txt
+```
+
+**Precedence**: Command-line arguments always override configuration file settings.
+
+**Note**: Configuration file support requires PyYAML (installed automatically with the package).
+
 ### List available instructions
 
 Show all supported instructions:
@@ -193,6 +244,9 @@ python -m generator -n 10 --pc-comments --base-address 0x1000 -f asm
 
 # Load/store instructions with restricted offset range
 python -m generator --pattern load-store --load-store-offset-min -100 --load-store-offset-max 100 -f asm
+
+# Generate instructions using configuration file
+python -m generator --config config.yaml
 ```
 
 ## Project Structure

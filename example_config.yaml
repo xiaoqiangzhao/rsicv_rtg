@@ -1,0 +1,50 @@
+# Example configuration file for riscv_rtg
+# Command-line arguments override settings from this file
+
+# Number of instructions to generate
+count: 100
+
+# Output format: hex, bin, asm, hexasm, all
+format: "hexasm"
+
+# Random seed for reproducible generation (null for random)
+seed: 42
+
+# Output file (null for stdout)
+output: "instructions.txt"
+
+# Include PC (program counter) comments in assembly output
+pc_comments: true
+
+# Base address for PC comments (hexadecimal or decimal)
+base_address: 0x1000
+
+# List all available instructions and exit (overrides generation)
+list_instructions: false
+
+# Only generate instructions of specified format: R, I, S, B, U, J
+by_format: null
+
+# Instruction pattern to generate:
+# random, load-store, raw, war, waw, basic-block, mixed
+pattern: "mixed"
+
+# Density of patterns in mixed generation (0.0-1.0)
+pattern_density: 0.3
+
+# Minimum offset for load/store instructions (12-bit signed immediate)
+load_store_offset_min: -100
+
+# Maximum offset for load/store instructions (12-bit signed immediate)
+load_store_offset_max: 100
+
+# Weights for instruction types (relative probabilities)
+# Default weight for all types is 1.0
+weights:
+  r: 2.0      # R-type instructions
+  i: 0.5      # I-type instructions
+  s: 1.0      # S-type instructions
+  b: 1.5      # B-type instructions
+  u: 1.0      # U-type instructions
+  j: 1.0      # J-type instructions
+  special: 0.0  # Special instructions (ecall, ebreak)
