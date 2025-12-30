@@ -169,14 +169,111 @@ def generate_constrained_instruction(isa, constraints, instr_name):
     return instr.encode(rd=rd, rs1=rs1, rs2=rs2, imm=imm)
 ```
 
+## Sequence Patterns (New Feature)
+
+Sequence patterns allow defining multi-instruction sequences with register dependencies and constraints. This feature is now implemented and available.
+
+### File: `sequence_patterns.yaml`
+
+Contains example sequence patterns for common instruction sequences:
+
+1. **load_use**: Load from memory then use in computation
+2. **compute_store**: Compute value then store to memory
+3. **load_compute_store**: Load, compute, then store (full pipeline)
+4. **register_copy**: Copy register using addi with zero immediate
+5. **address_calc**: Calculate address using auipc + addi
+6. **compare_branch**: Compare registers and branch
+7. **func_prologue**: Function prologue saving registers
+8. **arithmetic_chain**: Chain of arithmetic operations
+
+### Sequence Pattern Structure
+
+```yaml
+sequence_patterns:
+  pattern_name:
+    description: "Human-readable description"
+    min_length: 2  # Minimum number of instructions
+    max_length: 3  # Maximum number of instructions
+    weight: 1.5    # Relative probability for selection
+
+    # Step-by-step instruction generation
+    steps:
+      - step_type: "instruction"
+        description: "Load from memory"
+        instruction:
+          names: ["lb", "lh", "lw"]  # Choose one
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "loaded_value"  # Save for later use
+            rs1:
+              type: "register"
+              allowed: [8, 9, 10]  # s0-s1, a0
+          immediates:
+            i_type:
+              min: -64
+              max: 63
+        variables:
+          loaded_value:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Use loaded value"
+        instruction:
+          names: ["add", "sub"]
+        constraints:
+          registers:
+            rd:
+              type: "register"
+              allowed: [5, 6, 7]  # t0-t2
+            rs1:
+              type: "variable"  # Use variable from previous step
+              name: "loaded_value"
+```
+
+### Register Specification Types
+
+- `"register"`: Specific register or allowed list
+- `"variable"`: Reference to variable defined in sequence
+- `"same_as"`: Same as another register in same step
+- `"different_from"`: Different from specified registers
+- `"exclude_zero"`: Boolean flag to exclude x0
+
+### Usage with CLI
+
+```bash
+# Generate using sequence patterns
+python3 -m generator --pattern sequence \
+  --sequence-patterns-file isa_constraint/sequence_patterns.yaml \
+  --sequence-patterns load_use,compute_store \
+  --sequence-density 0.7 \
+  -n 20 -f asm
+
+# Use all patterns with default density
+python3 -m generator --pattern sequence \
+  --sequence-patterns-file isa_constraint/sequence_patterns.yaml \
+  -n 10 -f hexasm
+```
+
+### Integration Notes
+
+Sequence patterns:
+- Can be mixed with random instructions using `--sequence-density`
+- Support register flow between instructions via variables
+- Respect global and instruction-specific constraints
+- Work with semantic state tracking for realistic sequences
+
 ## Future Extensions
 
 Potential enhancements to the constraint system:
 1. **Dependency constraints**: Specify register dependencies between instructions
-2. **Sequence patterns**: Define multi-instruction patterns with constraints
-3. **Memory access patterns**: Constraints on address alignment and access size
-4. **Control flow constraints**: Valid branch targets and jump ranges
-5. **Timing constraints**: Pipeline hazards and timing requirements
+2. **Memory access patterns**: Constraints on address alignment and access size
+3. **Control flow constraints**: Valid branch targets and jump ranges
+4. **Timing constraints**: Pipeline hazards and timing requirements
+5. **Pattern composition**: Combine simple patterns into complex sequences
 
 ## See Also
 

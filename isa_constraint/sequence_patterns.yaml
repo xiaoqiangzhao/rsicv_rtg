@@ -1,0 +1,444 @@
+# RISC-V Sequence Pattern Definitions
+# This file defines multi-instruction sequence patterns for instruction generation
+
+# Sequence patterns - reusable instruction sequences with constraints
+sequence_patterns:
+  # Pattern 1: Load followed by computation (load-use dependency)
+  load_use:
+    description: "Load value from memory then use in computation"
+    min_length: 2
+    max_length: 2
+    weight: 2.0  # Higher probability for common pattern
+
+    # Step-by-step instruction generation
+    steps:
+      - step_type: "instruction"
+        description: "Load from memory"
+        instruction:
+          names: ["lb", "lh", "lw", "lbu", "lhu"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "loaded_value"  # Save loaded value for next step
+            rs1:
+              type: "register"
+              allowed: [8, 9, 10, 11, 12, 13, 14, 15]  # s0-s1, a0-a7
+              exclude_zero: true
+          immediates:
+            i_type:
+              min: -64
+              max: 63
+        variables:
+          loaded_value:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Use loaded value in computation"
+        instruction:
+          names: ["add", "sub", "xor", "or", "and", "addi"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "register"
+              allowed: [5, 6, 7, 28, 29, 30, 31]  # t0-t6
+              exclude_zero: true
+            rs1:
+              type: "variable"  # Use the loaded value
+              name: "loaded_value"
+            rs2:
+              type: "register"
+              allowed: [5, 6, 7, 28, 29, 30, 31]
+          immediates:
+            i_type:  # For addi
+              min: -10
+              max: 10
+
+  # Pattern 2: Compute then store (RAW dependency)
+  compute_store:
+    description: "Compute value then store to memory"
+    min_length: 2
+    max_length: 2
+    weight: 1.5
+
+    steps:
+      - step_type: "instruction"
+        description: "Compute value"
+        instruction:
+          names: ["add", "sub", "xor", "or", "and", "addi"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "computed_value"
+            rs1:
+              type: "register"
+              allowed: [5, 6, 7, 28, 29, 30, 31]
+              exclude_zero: true
+            rs2:
+              type: "register"
+              allowed: [5, 6, 7, 28, 29, 30, 31]
+          immediates:
+            i_type:
+              min: -10
+              max: 10
+        variables:
+          computed_value:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Store computed value"
+        instruction:
+          names: ["sb", "sh", "sw"]
+          weight: 1.0
+        constraints:
+          registers:
+            rs1:
+              type: "register"
+              allowed: [8, 9, 10, 11, 12, 13, 14, 15]  # s0-s1, a0-a7
+              exclude_zero: true
+            rs2:
+              type: "variable"  # Store the computed value
+              name: "computed_value"
+          immediates:
+            s_type:
+              min: -64
+              max: 63
+
+  # Pattern 3: Three-step load-compute-store pipeline
+  load_compute_store:
+    description: "Load, compute, then store (full pipeline)"
+    min_length: 3
+    max_length: 3
+    weight: 1.0
+
+    steps:
+      - step_type: "instruction"
+        description: "Load from memory"
+        instruction:
+          names: ["lw", "lh", "lb"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "data"
+            rs1:
+              type: "register"
+              allowed: [8, 9]  # s0-s1
+              exclude_zero: true
+          immediates:
+            i_type:
+              min: -32
+              max: 31
+        variables:
+          data:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Compute with loaded data"
+        instruction:
+          names: ["add", "sub", "addi"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "result"
+            rs1:
+              type: "variable"
+              name: "data"
+            rs2:
+              type: "register"
+              allowed: [5, 6, 7]
+          immediates:
+            i_type:
+              min: 1
+              max: 10
+        variables:
+          result:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Store result"
+        instruction:
+          names: ["sw", "sh", "sb"]
+          weight: 1.0
+        constraints:
+          registers:
+            rs1:
+              type: "register"
+              allowed: [8, 9]
+              exclude_zero: true
+            rs2:
+              type: "variable"
+              name: "result"
+          immediates:
+            s_type:
+              min: 0
+              max: 31
+
+  # Pattern 4: Register copy via addi (move instruction)
+  register_copy:
+    description: "Copy register using addi with zero immediate"
+    min_length: 1
+    max_length: 1
+    weight: 1.2
+
+    steps:
+      - step_type: "instruction"
+        description: "Copy source register to destination"
+        instruction:
+          names: ["addi"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "register"
+              allowed: [5, 6, 7, 28, 29, 30, 31]
+              exclude_zero: true
+            rs1:
+              type: "register"
+              allowed: [5, 6, 7, 8, 9, 10, 11, 28, 29, 30, 31]
+              exclude_zero: true
+          immediates:
+            i_type:
+              value: 0  # Always addi rd, rs1, 0
+
+  # Pattern 5: Memory address calculation (auipc + addi)
+  address_calc:
+    description: "Calculate address using auipc + addi"
+    min_length: 2
+    max_length: 2
+    weight: 0.8
+
+    steps:
+      - step_type: "instruction"
+        description: "Load upper immediate PC-relative"
+        instruction:
+          names: ["auipc"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "address_hi"
+          immediates:
+            u_type:
+              min: 0x1000
+              max: 0x5000
+        variables:
+          address_hi:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Add lower offset"
+        instruction:
+          names: ["addi"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "register"
+              allowed: [5, 6, 7]
+              exclude_zero: true
+            rs1:
+              type: "variable"
+              name: "address_hi"
+          immediates:
+            i_type:
+              min: -100
+              max: 100
+
+  # Pattern 6: Compare and branch
+  compare_branch:
+    description: "Compare two registers and branch"
+    min_length: 2
+    max_length: 2
+    weight: 1.0
+
+    steps:
+      - step_type: "instruction"
+        description: "Compare registers (set less than)"
+        instruction:
+          names: ["slt", "sltu"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "cmp_result"
+            rs1:
+              type: "register"
+              allowed: [5, 6, 7, 10, 11, 12]
+              exclude_zero: true
+            rs2:
+              type: "register"
+              allowed: [5, 6, 7, 10, 11, 12]
+              exclude_zero: true
+        variables:
+          cmp_result:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Branch based on comparison"
+        instruction:
+          names: ["bne", "beq"]
+          weight: 1.0
+        constraints:
+          registers:
+            rs1:
+              type: "variable"
+              name: "cmp_result"
+            rs2:
+              type: "register"
+              value: 0  # Compare with zero
+          immediates:
+            b_type:
+              min: 8    # Small forward branch
+              max: 32
+              alignment: 2
+
+  # Pattern 7: Function prologue (save registers)
+  func_prologue:
+    description: "Function prologue saving registers to stack"
+    min_length: 3
+    max_length: 5
+    weight: 0.5
+
+    steps:
+      - step_type: "instruction"
+        description: "Allocate stack space"
+        instruction:
+          names: ["addi"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "register"
+              value: 2  # sp
+            rs1:
+              type: "register"
+              value: 2  # sp
+          immediates:
+            i_type:
+              value: -16  # Allocate 16 bytes
+
+      - step_type: "instruction"
+        description: "Save return address"
+        instruction:
+          names: ["sw"]
+          weight: 1.0
+        constraints:
+          registers:
+            rs1:
+              type: "register"
+              value: 2  # sp
+            rs2:
+              type: "register"
+              value: 1  # ra
+          immediates:
+            s_type:
+              value: 12  # ra saved at sp+12
+
+      - step_type: "instruction"
+        description: "Save frame pointer"
+        instruction:
+          names: ["sw"]
+          weight: 1.0
+        constraints:
+          registers:
+            rs1:
+              type: "register"
+              value: 2  # sp
+            rs2:
+              type: "register"
+              value: 8  # s0/fp
+          immediates:
+            s_type:
+              value: 8  # s0 saved at sp+8
+
+  # Pattern 8: Simple arithmetic chain
+  arithmetic_chain:
+    description: "Chain of arithmetic operations"
+    min_length: 3
+    max_length: 4
+    weight: 1.5
+
+    steps:
+      - step_type: "instruction"
+        description: "Load immediate or from register"
+        instruction:
+          names: ["addi", "ori", "xori"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "temp1"
+            rs1:
+              type: "register"
+              value: 0  # x0 for immediate ops
+          immediates:
+            i_type:
+              min: 1
+              max: 100
+        variables:
+          temp1:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "First arithmetic operation"
+        instruction:
+          names: ["add", "sub", "xor"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "variable"
+              name: "temp2"
+            rs1:
+              type: "variable"
+              name: "temp1"
+            rs2:
+              type: "register"
+              allowed: [5, 6, 7]
+        variables:
+          temp2:
+            type: "register"
+            source_field: "rd"
+
+      - step_type: "instruction"
+        description: "Second arithmetic operation"
+        instruction:
+          names: ["add", "sub", "xor"]
+          weight: 1.0
+        constraints:
+          registers:
+            rd:
+              type: "register"
+              allowed: [5, 6, 7]
+              exclude_zero: true
+            rs1:
+              type: "variable"
+              name: "temp2"
+            rs2:
+              type: "register"
+              allowed: [5, 6, 7]
+
+# Usage notes:
+# 1. Patterns can be mixed with random instructions using pattern_density
+# 2. Register variables allow data flow between steps
+# 3. Immediate constraints can be specific values or ranges
+# 4. Weights control relative probability of pattern selection
+# 5. Patterns with same register in multiple steps create realistic dependencies

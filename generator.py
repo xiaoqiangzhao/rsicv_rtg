@@ -10,6 +10,7 @@ import yaml
 from typing import List, Tuple, Optional
 from riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
 from patterns import PatternGenerator, SemanticState, CommentGenerator
+from sequence_patterns import SequencePatternLoader, SequencePatternGenerator
 
 
 def parse_load_store_ranges(ranges_spec: Optional[str]) -> Optional[List[Tuple[int, int]]]:
@@ -292,13 +293,26 @@ def main():
     )
     # Pattern generation arguments
     parser.add_argument(
-        "--pattern", type=str, choices=["random", "load-store", "raw", "war", "waw", "basic-block", "mixed", "loop", "conditional", "memory", "function"],
+        "--pattern", type=str, choices=["random", "load-store", "raw", "war", "waw", "basic-block", "mixed", "loop", "conditional", "memory", "function", "sequence"],
         default="random",
         help="Instruction pattern to generate (default: random)"
     )
     parser.add_argument(
         "--pattern-density", type=float, default=0.3,
         help="Density of patterns in mixed generation (0.0-1.0) (default: 0.3)"
+    )
+    # Sequence pattern arguments
+    parser.add_argument(
+        "--sequence-patterns-file", type=str, default=None,
+        help="YAML file containing sequence pattern definitions (required for 'sequence' pattern)"
+    )
+    parser.add_argument(
+        "--sequence-patterns", type=str, default=None,
+        help="Comma-separated list of sequence pattern names to use (default: use all patterns)"
+    )
+    parser.add_argument(
+        "--sequence-density", type=float, default=0.3,
+        help="Density of sequence patterns in generation (0.0-1.0) (default: 0.3)"
     )
     # Semantic correlation arguments
     parser.add_argument(
@@ -590,6 +604,35 @@ def main():
             instr = isa.get_weighted_random_from_list(instructions)
             encoded, asm = isa.generate_random_instruction(instr)
             results.append((encoded, asm))
+
+    elif args.pattern == "sequence":
+        # Generate using sequence patterns
+        if not args.sequence_patterns_file:
+            print("Error: --sequence-patterns-file is required for 'sequence' pattern", file=sys.stderr)
+            return 1
+
+        # Load sequence patterns
+        try:
+            pattern_loader = SequencePatternLoader(args.sequence_patterns_file)
+        except Exception as e:
+            print(f"Error loading sequence patterns: {e}", file=sys.stderr)
+            return 1
+
+        # Parse pattern names if specified
+        pattern_names = None
+        if args.sequence_patterns:
+            pattern_names = [name.strip() for name in args.sequence_patterns.split(',')]
+
+        # Create sequence pattern generator
+        seq_pattern_gen = SequencePatternGenerator(isa, pattern_loader, pattern_gen)
+
+        # Generate sequence
+        seq_results = seq_pattern_gen.generate_sequence(
+            count=args.count,
+            pattern_names=pattern_names,
+            pattern_density=args.sequence_density
+        )
+        results.extend(seq_results)
 
     # Ensure we have exactly count instructions (in case pattern generation gave wrong number)
     results = results[:args.count]

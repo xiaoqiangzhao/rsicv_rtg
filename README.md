@@ -288,6 +288,43 @@ Currently supports RV32I base instruction set:
 - Basic block generation
 - Integration with Spike or other RISC-V simulators
 
+## ISA Constraints and Sequence Patterns
+
+The project includes an extensible constraint system for controlling instruction generation:
+
+### Constraint System
+- **Individual instruction constraints**: Control register usage, immediate ranges, and probabilities
+- **Instruction groups**: Apply constraints to groups of related instructions
+- **YAML configuration**: Define constraints in human-readable YAML files
+- **Examples**: See `isa_constraint/` directory for templates and examples
+
+### Sequence Patterns (New Feature)
+Define multi-instruction sequences with register dependencies:
+
+```bash
+# Generate using sequence patterns
+python3 -m generator --pattern sequence \
+  --sequence-patterns-file isa_constraint/sequence_patterns.yaml \
+  --sequence-patterns load_use,compute_store \
+  --sequence-density 0.7 \
+  -n 20 -f asm
+```
+
+**Key features:**
+- **Predefined patterns**: Load-use, compute-store, function prologue, etc.
+- **Register flow**: Variables enable data dependencies between instructions
+- **Constraint inheritance**: Patterns respect global and instruction constraints
+- **Mixed generation**: Combine patterns with random instructions via density control
+
+**Example patterns include:**
+- `load_use`: Load from memory → use in computation
+- `compute_store`: Compute value → store to memory
+- `register_copy`: Register copy using `addi rd, rs1, 0`
+- `address_calc`: PC-relative address calculation (`auipc` + `addi`)
+- `compare_branch`: Compare registers → conditional branch
+
+See `isa_constraint/README.md` for detailed documentation.
+
 ## Claude Code Integration
 
 This project includes Claude Code integration with skill scripts for common operations:
