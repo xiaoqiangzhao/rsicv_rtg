@@ -1,0 +1,230 @@
+# RISC-V ISA Constraint Template
+# This template defines constraints for RISC-V instruction generation
+# Groups instructions and applies constraints to control generation behavior
+
+# Global constraints apply to all instructions unless overridden
+global_constraints:
+  # Register constraints
+  registers:
+    # Allowed register numbers for each register type (0-31)
+    rd_allowed: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    rs1_allowed: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    rs2_allowed: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+
+    # Exclude zero register (x0) for certain register types
+    exclude_zero_rd: false
+    exclude_zero_rs1: false
+    exclude_zero_rs2: false
+
+    # Alternative: specify register ranges (inclusive)
+    rd_range:
+      min: 0
+      max: 31
+    rs1_range:
+      min: 0
+      max: 31
+    rs2_range:
+      min: 0
+      max: 31
+
+  # Immediate value constraints
+  immediates:
+    # For I-type instructions (addi, xori, load, etc.)
+    i_type:
+      min: -2048      # Minimum 12-bit signed immediate
+      max: 2047       # Maximum 12-bit signed immediate
+      # Optional: list of specific allowed values
+      # allowed_values: [-100, -50, -10, 0, 10, 50, 100]
+
+    # For S-type instructions (store offsets)
+    s_type:
+      min: -2048
+      max: 2047
+
+    # For B-type instructions (branch offsets, in bytes, must be multiple of 2)
+    b_type:
+      min: -4096      # Minimum 13-bit signed immediate (in bytes)
+      max: 4094       # Maximum 13-bit signed immediate (in bytes)
+      alignment: 2    # Must be multiple of 2 (2-byte aligned)
+
+    # For U-type instructions (20-bit upper immediate)
+    u_type:
+      min: 0
+      max: 0xFFFFF    # 20-bit maximum
+
+    # For J-type instructions (jump offsets, in bytes, must be multiple of 2)
+    j_type:
+      min: -1048576   # Minimum 21-bit signed immediate (in bytes)
+      max: 1048574    # Maximum 21-bit signed immediate (in bytes)
+      alignment: 2    # Must be multiple of 2
+
+  # Weight for random selection (relative probability)
+  weight: 1.0
+
+# Instruction groups
+# Groups allow applying constraints to multiple instructions at once
+# Groups are processed in order, later groups can override earlier ones
+instruction_groups:
+  # Group 1: All R-type arithmetic/logical instructions
+  r_type_arithmetic:
+    description: "R-type register-register arithmetic and logical instructions"
+    instructions: ["add", "sub", "xor", "or", "and", "sll", "srl", "sra", "slt", "sltu"]
+    constraints:
+      registers:
+        # Use temporary registers for arithmetic operations
+        rd_allowed: [5, 6, 7, 28, 29, 30, 31]  # t0-t2, t3-t6
+        rs1_allowed: [5, 6, 7, 28, 29, 30, 31]
+        rs2_allowed: [5, 6, 7, 28, 29, 30, 31]
+        exclude_zero_rd: true  # Don't write to x0
+      weight: 2.0  # Higher probability for arithmetic ops
+
+  # Group 2: I-type arithmetic immediate instructions
+  i_type_arithmetic:
+    description: "I-type arithmetic with immediate operands"
+    instructions: ["addi", "xori", "ori", "andi", "slli", "srli", "srai", "slti", "sltiu"]
+    constraints:
+      registers:
+        rd_allowed: [5, 6, 7, 28, 29, 30, 31]
+        rs1_allowed: [5, 6, 7, 28, 29, 30, 31]
+        exclude_zero_rd: true
+      immediates:
+        i_type:
+          min: -100  # Restrict to small immediates
+          max: 100
+      weight: 1.5
+
+  # Group 3: Load instructions
+  load_instructions:
+    description: "Load instructions from memory"
+    instructions: ["lb", "lh", "lw", "lbu", "lhu"]
+    constraints:
+      registers:
+        # Load to temporary registers, from saved/argument registers
+        rd_allowed: [5, 6, 7, 28, 29, 30, 31]  # t0-t6
+        rs1_allowed: [8, 9, 10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]  # s0-s1, a0-a7, s2-s11
+        exclude_zero_rd: true
+        exclude_zero_rs1: true  # Don't use x0 as base address
+      immediates:
+        i_type:
+          min: -100
+          max: 100
+      weight: 1.2
+
+  # Group 4: Store instructions
+  store_instructions:
+    description: "Store instructions to memory"
+    instructions: ["sb", "sh", "sw"]
+    constraints:
+      registers:
+        rs1_allowed: [8, 9, 10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]  # s0-s1, a0-a7, s2-s11
+        rs2_allowed: [5, 6, 7, 28, 29, 30, 31]  # Store from temporaries
+        exclude_zero_rs1: true
+        exclude_zero_rs2: true
+      immediates:
+        s_type:
+          min: -100
+          max: 100
+      weight: 1.2
+
+  # Group 5: Branch instructions
+  branch_instructions:
+    description: "Conditional branch instructions"
+    instructions: ["beq", "bne", "blt", "bge", "bltu", "bgeu"]
+    constraints:
+      registers:
+        rs1_allowed: [5, 6, 7, 10, 11, 12, 13, 14, 15, 28, 29, 30, 31]  # t0-t2, a0-a7, t3-t6
+        rs2_allowed: [5, 6, 7, 10, 11, 12, 13, 14, 15, 28, 29, 30, 31]
+        exclude_zero_rs1: false  # Can compare with x0
+        exclude_zero_rs2: false
+      immediates:
+        b_type:
+          min: -100  # Small branch offsets
+          max: 100
+          alignment: 2
+      weight: 0.8  # Lower probability for branches
+
+  # Group 6: Jump and link instructions
+  jump_instructions:
+    description: "Jump and link instructions"
+    instructions: ["jal", "jalr"]
+    constraints:
+      registers:
+        # jalr uses rs1, jal doesn't
+        rd_allowed: [1, 5, 6, 7, 28, 29, 30, 31]  # ra (x1) or temporaries
+        rs1_allowed: [1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 28, 29, 30, 31]
+        exclude_zero_rd: false  # jal x0, offset is valid
+        exclude_zero_rs1: false
+      immediates:
+        # jal uses J-type, jalr uses I-type
+        j_type:
+          min: -1000
+          max: 1000
+          alignment: 2
+        i_type:
+          min: -100
+          max: 100
+      weight: 0.5
+
+  # Group 7: Upper immediate instructions
+  upper_immediate:
+    description: "Upper immediate instructions (lui, auipc)"
+    instructions: ["lui", "auipc"]
+    constraints:
+      registers:
+        rd_allowed: [5, 6, 7, 28, 29, 30, 31]
+        exclude_zero_rd: true
+      immediates:
+        u_type:
+          min: 0x10000
+          max: 0x7FFFF  # Reasonable address range
+      weight: 0.3
+
+  # Group 8: Special instructions
+  special_instructions:
+    description: "Special system instructions"
+    instructions: ["ecall", "ebreak"]
+    constraints:
+      # No register constraints for these
+      weight: 0.1  # Very low probability
+
+# Individual instruction overrides (highest precedence)
+# These override any group constraints for specific instructions
+instruction_overrides:
+  addi:
+    description: "Add immediate with restricted range"
+    constraints:
+      immediates:
+        i_type:
+          min: -10
+          max: 10
+      weight: 3.0  # Very common instruction
+
+  lui:
+    description: "Load upper immediate for specific address ranges"
+    constraints:
+      immediates:
+        u_type:
+          # Common address ranges
+          allowed_values: [0x10000, 0x20000, 0x30000, 0x40000, 0x50000, 0x60000, 0x70000]
+
+  beq:
+    description: "Branch if equal with small offsets"
+    constraints:
+      immediates:
+        b_type:
+          min: -20
+          max: 20
+          alignment: 2
+
+  # Add more instruction-specific overrides as needed
+
+# Constraint precedence (from lowest to highest):
+# 1. global_constraints
+# 2. instruction_groups (processed in order of definition)
+# 3. instruction_overrides
+#
+# Within each level, constraints are merged:
+# - Lists (like rd_allowed) are replaced, not merged
+# - Boolean flags (exclude_zero_rd) are replaced
+# - Ranges (min/max) are replaced
+# - Weights are multiplied (global * group * override)
