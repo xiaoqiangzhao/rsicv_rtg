@@ -288,6 +288,19 @@ Currently supports RV32I base instruction set:
 - Basic block generation
 - Integration with Spike or other RISC-V simulators
 
+## Claude Code Integration
+
+This project includes Claude Code integration with skill scripts for common operations:
+
+### Available Skills
+- **Test Runner**: Run unit tests with `./.claude/skills/skill-test.sh`
+- **Instruction Generator**: Generate instructions with `./.claude/skills/skill-generate.sh`
+- **Instruction Lister**: List available instructions with `./.claude/skills/skill-list.sh`
+- **Configuration Validator**: Validate config files with `./.claude/skills/skill-validate.sh`
+- **Register Range Tester**: Test register range control with `./.claude/skills/skill-regtest.sh`
+
+See [CLAUDE.md](CLAUDE.md) for detailed skill documentation and usage examples.
+
 ## License
 
 MIT

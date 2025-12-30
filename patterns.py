@@ -267,10 +267,10 @@ class PatternGenerator:
         if instr is None:
             instr = self.isa.get_random_instruction()
 
-        # Generate random registers
-        rd = Registers.random()
-        rs1 = Registers.random()
-        rs2 = Registers.random()
+        # Generate random registers using ISA's configured ranges
+        rd = self.isa.get_random_rd()
+        rs1 = self.isa.get_random_rs1()
+        rs2 = self.isa.get_random_rs2()
         imm = 0
 
         # Special handling for certain instructions
@@ -306,6 +306,41 @@ class PatternGenerator:
             asm = f"{asm}  # {comment}"
 
         return encoded, asm
+
+    def _generate_specific_instruction(self, instr: Instruction, rd: int = 0, rs1: int = 0,
+                                      rs2: int = 0, imm: int = 0) -> Tuple[int, str]:
+        """Generate a specific instruction with given registers and immediate.
+
+        Args:
+            instr: Instruction to generate.
+            rd: Destination register (0-31).
+            rs1: Source register 1 (0-31).
+            rs2: Source register 2 (0-31).
+            imm: Immediate value.
+
+        Returns:
+            (encoded, assembly) tuple.
+        """
+        # Encode instruction
+        encoded = instr.encode(rd=rd, rs1=rs1, rs2=rs2, imm=imm)
+        asm = instr.assembly(rd=rd, rs1=rs1, rs2=rs2, imm=imm)
+
+        # Record instruction in semantic state
+        self._record_instruction(instr, rd, rs1, rs2, imm)
+
+        # Generate comment
+        comment = self._generate_comment(instr, rd, rs1, rs2, imm)
+        if comment:
+            asm = f"{asm}  # {comment}"
+
+        return encoded, asm
+
+    def _get_instr_by_name(self, name: str) -> Optional[Instruction]:
+        """Get instruction by name from ISA."""
+        for instr in self.isa.instructions:
+            if instr.name == name:
+                return instr
+        return None
 
     def _get_immediate(self, instr):
         """Get a random immediate appropriate for the instruction."""
@@ -358,17 +393,21 @@ class PatternGenerator:
         store = random.choice(store_instrs)
 
         # Generate registers: rd for load, rs2 for store (same register creates dependency)
-        rd = Registers.random(exclude_zero=True)
-        rs1 = Registers.random(exclude_zero=True)
+        rd = self.isa.get_random_rd(exclude_zero=True)
+        rs1 = self.isa.get_random_rs1(exclude_zero=True)
         rs2 = rd  # Same register creates dependency
         # For store, we need rs1 for base address (can be same or different)
-        store_rs1 = Registers.random(exclude_zero=True)
+        store_rs1 = self.isa.get_random_rs1(exclude_zero=True)
 
-        # Generate immediates using ISA's offset range if available
-        offset_min = getattr(self.isa, 'load_store_offset_min', -2048)
-        offset_max = getattr(self.isa, 'load_store_offset_max', 2047)
-        load_imm = random.randint(offset_min, offset_max)
-        store_imm = random.randint(offset_min, offset_max)
+        # Generate immediates using ISA's offset generation if available
+        if hasattr(self.isa, 'generate_load_store_offset'):
+            load_imm = self.isa.generate_load_store_offset()
+            store_imm = self.isa.generate_load_store_offset()
+        else:
+            offset_min = getattr(self.isa, 'load_store_offset_min', -2048)
+            offset_max = getattr(self.isa, 'load_store_offset_max', 2047)
+            load_imm = random.randint(offset_min, offset_max)
+            store_imm = random.randint(offset_min, offset_max)
 
         # Encode instructions
         load_encoded = load.encode(rd=rd, rs1=rs1, rs2=0, imm=load_imm)
@@ -401,9 +440,9 @@ class PatternGenerator:
 
         # First instruction writes to rd
         instr1 = random.choice(write_instrs)
-        rd = Registers.random(exclude_zero=True)
-        rs1 = Registers.random(exclude_zero=True)
-        rs2 = Registers.random(exclude_zero=True)
+        rd = self.isa.get_random_rd(exclude_zero=True)
+        rs1 = self.isa.get_random_rs1(exclude_zero=True)
+        rs2 = self.isa.get_random_rs2(exclude_zero=True)
 
         # Generate first instruction
         if instr1.format == InstructionFormat.R:
@@ -431,12 +470,12 @@ class PatternGenerator:
 
         if use_as_rs1:
             rs1_2 = rd
-            rs2_2 = Registers.random(exclude_zero=True)
+            rs2_2 = self.isa.get_random_rs2(exclude_zero=True)
         else:
-            rs1_2 = Registers.random(exclude_zero=True)
+            rs1_2 = self.isa.get_random_rs1(exclude_zero=True)
             rs2_2 = rd
 
-        rd2 = Registers.random(exclude_zero=True) if instr2.format not in [InstructionFormat.S, InstructionFormat.B] else 0
+        rd2 = self.isa.get_random_rd(exclude_zero=True) if instr2.format not in [InstructionFormat.S, InstructionFormat.B] else 0
 
         # Generate second instruction
         if instr2.format == InstructionFormat.R:
@@ -476,19 +515,19 @@ class PatternGenerator:
 
         # First instruction reads from register
         instr1 = random.choice(read_instrs)
-        hazard_reg = Registers.random(exclude_zero=True)
+        hazard_reg = self.isa.get_random_rd(exclude_zero=True)
 
         # Choose whether hazard_reg is rs1 or rs2 for first instruction
         use_as_rs1 = random.choice([True, False])
 
         if use_as_rs1:
             rs1 = hazard_reg
-            rs2 = Registers.random(exclude_zero=True)
+            rs2 = self.isa.get_random_rs2(exclude_zero=True)
         else:
-            rs1 = Registers.random(exclude_zero=True)
+            rs1 = self.isa.get_random_rs1(exclude_zero=True)
             rs2 = hazard_reg
 
-        rd = Registers.random(exclude_zero=True) if instr1.format not in [InstructionFormat.S, InstructionFormat.B] else 0
+        rd = self.isa.get_random_rd(exclude_zero=True) if instr1.format not in [InstructionFormat.S, InstructionFormat.B] else 0
 
         # Generate first instruction
         if instr1.format == InstructionFormat.R:
@@ -513,8 +552,8 @@ class PatternGenerator:
         instr2 = random.choice(write_instrs)
         rd2 = hazard_reg  # Write to same register
 
-        rs1_2 = Registers.random(exclude_zero=True)
-        rs2_2 = Registers.random(exclude_zero=True)
+        rs1_2 = self.isa.get_random_rs1(exclude_zero=True)
+        rs2_2 = self.isa.get_random_rs2(exclude_zero=True)
 
         # Generate second instruction
         if instr2.format == InstructionFormat.R:
@@ -551,11 +590,11 @@ class PatternGenerator:
         instr2 = random.choice([instr for instr in write_instrs if instr != instr1])
 
         # Same register for both
-        hazard_reg = Registers.random(exclude_zero=True)
+        hazard_reg = self.isa.get_random_rd(exclude_zero=True)
 
         # Generate first instruction
-        rs1_1 = Registers.random(exclude_zero=True)
-        rs2_1 = Registers.random(exclude_zero=True)
+        rs1_1 = self.isa.get_random_rs1(exclude_zero=True)
+        rs2_1 = self.isa.get_random_rs2(exclude_zero=True)
 
         if instr1.format == InstructionFormat.R:
             imm1 = 0
@@ -572,8 +611,8 @@ class PatternGenerator:
         asm1 = instr1.assembly(rd=hazard_reg, rs1=rs1_1, rs2=rs2_1, imm=imm1)
 
         # Generate second instruction (writes to same register)
-        rs1_2 = Registers.random(exclude_zero=True)
-        rs2_2 = Registers.random(exclude_zero=True)
+        rs1_2 = self.isa.get_random_rs1(exclude_zero=True)
+        rs2_2 = self.isa.get_random_rs2(exclude_zero=True)
 
         if instr2.format == InstructionFormat.R:
             imm2 = 0
@@ -680,3 +719,279 @@ class PatternGenerator:
                 remaining -= 1
 
         return result[:count]
+
+    def generate_loop_pattern(self, iterations: int = 3, body_size: int = 3) -> List[Tuple[int, str]]:
+        """Generate a loop pattern with counter register and conditional branch.
+
+        Args:
+            iterations: Number of loop iterations (determines initial counter value)
+            body_size: Number of instructions in loop body
+
+        Returns:
+            List of (encoded, assembly) instructions
+        """
+        if self.semantic_state is None:
+            # Fall back to basic block if no semantic state
+            return self.generate_basic_block(body_size + 3)
+
+        results = []
+
+        # Choose a loop counter register
+        counter_reg = self.isa.get_random_rd(exclude_zero=True)
+
+        # Enter loop in semantic state
+        self.semantic_state.enter_loop(counter_reg)
+
+        # 1. Initialize loop counter: addi counter_reg, x0, iterations
+        addi_instr = self._get_instr_by_name('addi')
+        if addi_instr:
+            encoded, asm = self._generate_specific_instruction(addi_instr, rd=counter_reg, rs1=0, imm=iterations)
+            results.append((encoded, asm))
+        else:
+            # Fallback: generate random instruction
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 2. Generate loop body
+        for _ in range(body_size):
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 3. Decrement counter: addi counter_reg, counter_reg, -1
+        if addi_instr:
+            encoded, asm = self._generate_specific_instruction(addi_instr, rd=counter_reg, rs1=counter_reg, imm=-1)
+            results.append((encoded, asm))
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 4. Conditional branch: bne counter_reg, x0, -offset
+        # Offset in bytes: from branch to start of loop body (after init)
+        # Each instruction is 4 bytes
+        # Branch offset = -((body_size + 1) * 4)  # body + decrement instruction
+        offset = -((body_size + 1) * 4)
+        bne_instr = self._get_instr_by_name('bne')
+        if bne_instr:
+            encoded, asm = self._generate_specific_instruction(bne_instr, rs1=counter_reg, rs2=0, imm=offset)
+            results.append((encoded, asm))
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # Exit loop in semantic state
+        self.semantic_state.exit_loop()
+
+        return results
+
+    def generate_conditional_pattern(self, then_size: int = 2, else_size: int = 2) -> List[Tuple[int, str]]:
+        """Generate an if-then-else conditional pattern.
+
+        Args:
+            then_size: Number of instructions in then block
+            else_size: Number of instructions in else block
+
+        Returns:
+            List of (encoded, assembly) instructions
+        """
+        if self.semantic_state is None:
+            # Fall back to basic block
+            return self.generate_basic_block(then_size + else_size + 2)
+
+        results = []
+
+        # Choose registers for comparison
+        rs1 = self.isa.get_random_rs1(exclude_zero=True)
+        rs2 = self.isa.get_random_rs2(exclude_zero=True)
+
+        # 1. Compare and branch to else block if not equal
+        # Use beq with offset to skip then block
+        # Offset = (then_size + 1) * 4  # then block + jump instruction
+        offset_to_else = (then_size + 1) * 4
+        beq_instr = self._get_instr_by_name('beq')
+        if beq_instr:
+            encoded, asm = self._generate_specific_instruction(beq_instr, rs1=rs1, rs2=rs2, imm=offset_to_else)
+            results.append((encoded, asm))
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 2. Then block
+        for _ in range(then_size):
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 3. Unconditional jump to end (skip else block)
+        # jal x0, offset
+        # Offset = else_size * 4
+        jump_offset = else_size * 4
+        jal_instr = self._get_instr_by_name('jal')
+        if jal_instr:
+            encoded, asm = self._generate_specific_instruction(jal_instr, rd=0, imm=jump_offset)
+            results.append((encoded, asm))
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 4. Else block
+        for _ in range(else_size):
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        return results
+
+    def generate_memory_sequence(self, size: int = 4, base_reg: Optional[int] = None,
+                                stride: int = 4, mix_load_store: bool = True) -> List[Tuple[int, str]]:
+        """Generate a sequence of memory accesses with sequential offsets.
+
+        Args:
+            size: Number of memory access instructions
+            base_reg: Base register for addresses (None = random)
+            stride: Offset stride between accesses (default 4 bytes)
+            mix_load_store: Whether to mix loads and stores (True) or all loads (False)
+
+        Returns:
+            List of (encoded, assembly) instructions
+        """
+        if self.semantic_state is None:
+            return self.generate_random_sequence(size)
+
+        results = []
+
+        # Choose base register if not provided
+        if base_reg is None:
+            base_reg = self.isa.get_random_rs1(exclude_zero=True)
+
+        # Get load and store instructions
+        load_instrs = [instr for instr in self.isa.instructions
+                      if instr.name in ['lb', 'lh', 'lw', 'lbu', 'lhu']]
+        store_instrs = [instr for instr in self.isa.instructions
+                       if instr.name in ['sb', 'sh', 'sw']]
+
+        if not load_instrs or not store_instrs:
+            return self.generate_random_sequence(size)
+
+        current_offset = 0
+
+        for i in range(size):
+            # Decide load vs store
+            is_load = random.choice([True, False]) if mix_load_store else True
+
+            if is_load:
+                instr = random.choice(load_instrs)
+                # Choose destination register
+                rd = self.isa.get_random_rd(exclude_zero=True)
+                encoded, asm = self._generate_specific_instruction(instr, rd=rd, rs1=base_reg, imm=current_offset)
+            else:
+                instr = random.choice(store_instrs)
+                # Choose source register
+                rs2 = self.isa.get_random_rs2(exclude_zero=True)
+                encoded, asm = self._generate_specific_instruction(instr, rs1=base_reg, rs2=rs2, imm=current_offset)
+
+            results.append((encoded, asm))
+            current_offset += stride
+
+        return results
+
+    def generate_function_sequence(self, body_size: int = 5, save_regs: int = 2,
+                                  stack_size: int = 16) -> List[Tuple[int, str]]:
+        """Generate a function-like sequence with prologue, body, and epilogue.
+
+        Args:
+            body_size: Number of instructions in function body
+            save_regs: Number of registers to save/restore
+            stack_size: Stack space to allocate (multiple of 16)
+
+        Returns:
+            List of (encoded, assembly) instructions
+        """
+        if self.semantic_state is None:
+            return self.generate_basic_block(body_size + 4)
+
+        # Enter function state
+        self.semantic_state.enter_function()
+
+        results = []
+
+        # Prologue
+        # 1. Save registers to stack (push)
+        # We'll save registers ra (x1) and some s registers
+        registers_to_save = [1]  # ra (x1) always saved
+        # Add some s registers (x8-x9, x18-x27)
+        s_registers = [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+        if save_regs > 1:
+            additional = min(save_regs - 1, len(s_registers))
+            registers_to_save.extend(random.sample(s_registers, additional))
+
+        # Sort for consistent stack layout
+        registers_to_save.sort()
+
+        # Save each register with sw reg, offset(sp)
+        sw_instr = self._get_instr_by_name('sw')
+        if sw_instr:
+            offset = 0
+            for reg in registers_to_save:
+                encoded, asm = self._generate_specific_instruction(sw_instr, rs1=2, rs2=reg, imm=offset)
+                results.append((encoded, asm))
+                offset += 4
+                self.semantic_state.save_register(reg)
+        else:
+            # Fallback
+            for _ in range(save_regs):
+                encoded, asm = self._generate_single_random_instruction()
+                results.append((encoded, asm))
+
+        # 2. Allocate stack space: addi sp, sp, -stack_size
+        addi_instr = self._get_instr_by_name('addi')
+        if addi_instr:
+            encoded, asm = self._generate_specific_instruction(addi_instr, rd=2, rs1=2, imm=-stack_size)
+            results.append((encoded, asm))
+            self.semantic_state.allocate_stack(stack_size)
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # Function body
+        for _ in range(body_size):
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # Epilogue
+        # 1. Deallocate stack space: addi sp, sp, stack_size
+        if addi_instr:
+            encoded, asm = self._generate_specific_instruction(addi_instr, rd=2, rs1=2, imm=stack_size)
+            results.append((encoded, asm))
+            self.semantic_state.deallocate_stack(stack_size)
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # 2. Restore registers
+        if sw_instr:
+            offset = 0
+            for reg in registers_to_save:
+                lw_instr = self._get_instr_by_name('lw')
+                if lw_instr:
+                    encoded, asm = self._generate_specific_instruction(lw_instr, rd=reg, rs1=2, imm=offset)
+                    results.append((encoded, asm))
+                else:
+                    encoded, asm = self._generate_single_random_instruction()
+                    results.append((encoded, asm))
+                offset += 4
+        else:
+            for _ in range(save_regs):
+                encoded, asm = self._generate_single_random_instruction()
+                results.append((encoded, asm))
+
+        # 3. Return: jalr x0, ra, 0
+        jalr_instr = self._get_instr_by_name('jalr')
+        if jalr_instr:
+            encoded, asm = self._generate_specific_instruction(jalr_instr, rd=0, rs1=1, imm=0)
+            results.append((encoded, asm))
+        else:
+            encoded, asm = self._generate_single_random_instruction()
+            results.append((encoded, asm))
+
+        # Exit function state
+        self.semantic_state.exit_function()
+
+        return results

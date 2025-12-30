@@ -7,9 +7,88 @@ import argparse
 import random
 import sys
 import yaml
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
 from patterns import PatternGenerator, SemanticState, CommentGenerator
+
+
+def parse_load_store_ranges(ranges_spec: Optional[str]) -> Optional[List[Tuple[int, int]]]:
+    """Parse load/store offset ranges specification.
+
+    Args:
+        ranges_spec: Comma-separated list of "base:size" pairs, or None.
+
+    Returns:
+        List of (base, size) tuples, or None if ranges_spec is None.
+
+    Raises:
+        ValueError: If format is invalid or size <= 0.
+    """
+    if ranges_spec is None:
+        return None
+
+    ranges = []
+    for part in ranges_spec.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if ':' not in part:
+            raise ValueError(f"Range '{part}' must be in format 'base:size'")
+        base_str, size_str = part.split(':', 1)
+        try:
+            base = int(base_str, 0)  # Supports hex (0x) and decimal
+            size = int(size_str, 0)
+        except ValueError as e:
+            raise ValueError(f"Invalid integer in range '{part}': {e}")
+        if size <= 0:
+            raise ValueError(f"Range size must be positive, got size={size} in '{part}'")
+        ranges.append((base, size))
+    return ranges
+
+
+def convert_load_store_ranges(value) -> Optional[List[Tuple[int, int]]]:
+    """Convert load_store_ranges config value to list of tuples.
+
+    Handles:
+    - None -> None
+    - String (comma-separated) -> parse_load_store_ranges
+    - List of strings -> each string parsed as "base:size"
+    - List of lists -> each inner list [base, size]
+
+    Returns:
+        List of (base, size) tuples, or None.
+
+    Raises:
+        ValueError: If format is invalid.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return parse_load_store_ranges(value)
+    if isinstance(value, list):
+        ranges = []
+        for item in value:
+            if isinstance(item, str):
+                # Expect "base:size"
+                if ':' not in item:
+                    raise ValueError(f"Range string '{item}' must be in format 'base:size'")
+                base_str, size_str = item.split(':', 1)
+                base = int(base_str, 0)
+                size = int(size_str, 0)
+            elif isinstance(item, list) and len(item) == 2:
+                base, size = item[0], item[1]
+                # Convert to int if they're strings
+                if isinstance(base, str):
+                    base = int(base, 0)
+                if isinstance(size, str):
+                    size = int(size, 0)
+            else:
+                raise ValueError(f"Invalid range item: {item}. Expected string 'base:size' or list [base, size]")
+            if size <= 0:
+                raise ValueError(f"Range size must be positive, got size={size}")
+            ranges.append((base, size))
+        return ranges
+    raise ValueError(f"Invalid type for load_store_ranges: {type(value)}")
 
 
 def generate_instructions(count: int, output_format: str, seed: int = None) -> List[Tuple[int, str]]:
@@ -69,7 +148,8 @@ def validate_and_convert_config(config: dict) -> dict:
 
     # Convert known fields
     int_fields = ['count', 'seed', 'base_address',
-                  'load_store_offset_min', 'load_store_offset_max']
+                  'load_store_offset_min', 'load_store_offset_max',
+                  'rd_min', 'rd_max', 'rs1_min', 'rs1_max', 'rs2_min', 'rs2_max']
     float_fields = ['pattern_density']
 
     for key, value in config.items():
@@ -82,6 +162,9 @@ def validate_and_convert_config(config: dict) -> dict:
             for weight_key, weight_val in value.items():
                 if weight_val is not None:
                     validated[key][weight_key] = float(weight_val)
+        elif key == 'load_store_ranges' and value is not None:
+            # Convert load/store ranges
+            validated[key] = convert_load_store_ranges(value)
         elif key in int_fields and value is not None:
             validated[key] = convert_int(value)
         elif key in float_fields and value is not None:
@@ -209,7 +292,7 @@ def main():
     )
     # Pattern generation arguments
     parser.add_argument(
-        "--pattern", type=str, choices=["random", "load-store", "raw", "war", "waw", "basic-block", "mixed"],
+        "--pattern", type=str, choices=["random", "load-store", "raw", "war", "waw", "basic-block", "mixed", "loop", "conditional", "memory", "function"],
         default="random",
         help="Instruction pattern to generate (default: random)"
     )
@@ -243,6 +326,35 @@ def main():
         "--load-store-offset-max", type=lambda x: int(x, 0), default=2047,
         help="Maximum offset for load/store instructions (default: 2047)"
     )
+    parser.add_argument(
+        "--load-store-ranges", type=str, default=None,
+        help="Comma-separated list of base:size ranges for load/store offsets (e.g., '-100:200,0x100:0x20'). Use --load-store-ranges='-100:200' or --load-store-ranges \"-100:200\" after -- separator."
+    )
+    # Register range arguments
+    parser.add_argument(
+        "--rd-min", type=lambda x: int(x, 0), default=0,
+        help="Minimum destination register number (0-31, default: 0)"
+    )
+    parser.add_argument(
+        "--rd-max", type=lambda x: int(x, 0), default=31,
+        help="Maximum destination register number (0-31, default: 31)"
+    )
+    parser.add_argument(
+        "--rs1-min", type=lambda x: int(x, 0), default=0,
+        help="Minimum source register 1 number (0-31, default: 0)"
+    )
+    parser.add_argument(
+        "--rs1-max", type=lambda x: int(x, 0), default=31,
+        help="Maximum source register 1 number (0-31, default: 31)"
+    )
+    parser.add_argument(
+        "--rs2-min", type=lambda x: int(x, 0), default=0,
+        help="Minimum source register 2 number (0-31, default: 0)"
+    )
+    parser.add_argument(
+        "--rs2-max", type=lambda x: int(x, 0), default=31,
+        help="Maximum source register 2 number (0-31, default: 31)"
+    )
     # Hexasm format arguments
     parser.add_argument(
         "--no-hex-comments", action="store_true", default=False,
@@ -275,10 +387,23 @@ def main():
 
     # Now args contains merged values (CLI overrides config)
 
+    # Parse load/store ranges if specified
+    load_store_offset_ranges = None
+    if args.load_store_ranges is not None:
+        if isinstance(args.load_store_ranges, str):
+            load_store_offset_ranges = parse_load_store_ranges(args.load_store_ranges)
+        else:
+            # Assume it's already a list of tuples (from config)
+            load_store_offset_ranges = args.load_store_ranges
+
     # Handle list-instructions
     if args.list_instructions:
         isa = RISCVISA(load_store_offset_min=args.load_store_offset_min,
-                       load_store_offset_max=args.load_store_offset_max)
+                       load_store_offset_max=args.load_store_offset_max,
+                       load_store_offset_ranges=load_store_offset_ranges,
+                       rd_min=args.rd_min, rd_max=args.rd_max,
+                       rs1_min=args.rs1_min, rs1_max=args.rs1_max,
+                       rs2_min=args.rs2_min, rs2_max=args.rs2_max)
         print(f"Total instructions: {len(isa.instructions)}")
         for instr in isa.instructions:
             print(f"  {instr.name:8} {instr.format.value:4} opcode={instr.opcode:07b}")
@@ -289,7 +414,11 @@ def main():
         random.seed(args.seed)
 
     isa = RISCVISA(load_store_offset_min=args.load_store_offset_min,
-                   load_store_offset_max=args.load_store_offset_max)
+                   load_store_offset_max=args.load_store_offset_max,
+                   load_store_offset_ranges=load_store_offset_ranges,
+                   rd_min=args.rd_min, rd_max=args.rd_max,
+                   rs1_min=args.rs1_min, rs1_max=args.rs1_max,
+                   rs2_min=args.rs2_min, rs2_max=args.rs2_max)
 
     # Apply weights based on command-line arguments
     if args.weight_r != 1.0:
@@ -349,7 +478,7 @@ def main():
         # Use existing random generation with format filtering
         for _ in range(args.count):
             instr = isa.get_weighted_random_from_list(instructions)
-            encoded, asm = instr.generate_random()
+            encoded, asm = isa.generate_random_instruction(instr)
             results.append((encoded, asm))
 
     elif args.pattern == "load-store":
@@ -364,7 +493,7 @@ def main():
         # Add extra random instructions if count is odd
         for _ in range(extra_needed):
             instr = isa.get_weighted_random_from_list(instructions)
-            encoded, asm = instr.generate_random()
+            encoded, asm = isa.generate_random_instruction(instr)
             results.append((encoded, asm))
 
     elif args.pattern == "raw":
@@ -378,7 +507,7 @@ def main():
 
         for _ in range(extra_needed):
             instr = isa.get_weighted_random_from_list(instructions)
-            encoded, asm = instr.generate_random()
+            encoded, asm = isa.generate_random_instruction(instr)
             results.append((encoded, asm))
 
     elif args.pattern == "war":
@@ -392,7 +521,7 @@ def main():
 
         for _ in range(extra_needed):
             instr = isa.get_weighted_random_from_list(instructions)
-            encoded, asm = instr.generate_random()
+            encoded, asm = isa.generate_random_instruction(instr)
             results.append((encoded, asm))
 
     elif args.pattern == "waw":
@@ -406,7 +535,7 @@ def main():
 
         for _ in range(extra_needed):
             instr = isa.get_weighted_random_from_list(instructions)
-            encoded, asm = instr.generate_random()
+            encoded, asm = isa.generate_random_instruction(instr)
             results.append((encoded, asm))
 
     elif args.pattern == "basic-block":
@@ -419,6 +548,48 @@ def main():
         patterns_list = ['load_store', 'raw', 'war', 'waw']
         mixed = pattern_gen.generate_mixed_patterns(args.count, patterns_list, density=args.pattern_density)
         results.extend(mixed)
+
+    elif args.pattern == "loop":
+        # Generate loop pattern
+        # Adjust body size to approximate count
+        body_size = max(1, args.count - 3)  # init, decrement, branch
+        loop_seq = pattern_gen.generate_loop_pattern(iterations=3, body_size=body_size)
+        results.extend(loop_seq)
+        # Fill remaining with random if needed
+        while len(results) < args.count:
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = isa.generate_random_instruction(instr)
+            results.append((encoded, asm))
+
+    elif args.pattern == "conditional":
+        # Generate conditional pattern
+        # Split count between then and else blocks
+        then_size = max(1, args.count // 2 - 1)
+        else_size = max(1, args.count - then_size - 2)  # branch and jump
+        cond_seq = pattern_gen.generate_conditional_pattern(then_size=then_size, else_size=else_size)
+        results.extend(cond_seq)
+        while len(results) < args.count:
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = isa.generate_random_instruction(instr)
+            results.append((encoded, asm))
+
+    elif args.pattern == "memory":
+        # Generate memory sequence
+        mem_seq = pattern_gen.generate_memory_sequence(size=args.count)
+        results.extend(mem_seq)
+        # memory sequence already generates exactly size instructions
+
+    elif args.pattern == "function":
+        # Generate function sequence
+        # Adjust body size to approximate count
+        prologue_epilogue_size = 8  # approximate
+        body_size = max(1, args.count - prologue_epilogue_size)
+        func_seq = pattern_gen.generate_function_sequence(body_size=body_size)
+        results.extend(func_seq)
+        while len(results) < args.count:
+            instr = isa.get_weighted_random_from_list(instructions)
+            encoded, asm = isa.generate_random_instruction(instr)
+            results.append((encoded, asm))
 
     # Ensure we have exactly count instructions (in case pattern generation gave wrong number)
     results = results[:args.count]

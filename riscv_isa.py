@@ -52,6 +52,30 @@ class Registers(Enum):
             return random.randint(1, 31)
         return random.randint(0, 31)
 
+    @staticmethod
+    def random_range(min_reg: int, max_reg: int, exclude_zero: bool = False) -> int:
+        """Return a random register number within [min_reg, max_reg] inclusive."""
+        if min_reg < 0 or max_reg > 31 or min_reg > max_reg:
+            raise ValueError(f"Invalid register range [{min_reg}, {max_reg}]. Must be within 0-31.")
+        if exclude_zero and min_reg == 0 and max_reg == 0:
+            raise ValueError("Cannot exclude zero register when range is [0, 0].")
+
+        # Generate random register in range
+        reg = random.randint(min_reg, max_reg)
+        if exclude_zero and reg == 0:
+            # If zero is selected and excluded, try again (could be infinite if range only contains zero)
+            # But we already checked above, so range must contain non-zero registers
+            while reg == 0:
+                reg = random.randint(min_reg, max_reg)
+        return reg
+
+    @staticmethod
+    def random_from_list(allowed_registers: List[int]) -> int:
+        """Return a random register number from allowed list."""
+        if not allowed_registers:
+            raise ValueError("Allowed registers list cannot be empty.")
+        return random.choice(allowed_registers)
+
 
 class InstructionFormat(Enum):
     """RISC-V instruction formats."""
@@ -154,6 +178,52 @@ class Instruction:
         asm = self.assembly(rd, rs1, rs2, imm)
         return encoded, asm
 
+    def generate_with_registers(self, rd: Optional[int] = None, rs1: Optional[int] = None,
+                                rs2: Optional[int] = None, imm: Optional[int] = None) -> Tuple[int, str]:
+        """Generate instruction with specified registers/immediate (or random if None).
+
+        Args:
+            rd: Destination register (0-31). If None, random.
+            rs1: Source register 1 (0-31). If None, random.
+            rs2: Source register 2 (0-31). If None, random.
+            imm: Immediate value. If None, uses instruction's immediate generator if available, else 0.
+
+        Returns:
+            (encoded_instruction, assembly_string)
+        """
+        # Generate random registers if not provided
+        if rd is None:
+            rd = Registers.random()
+        if rs1 is None:
+            rs1 = Registers.random()
+        if rs2 is None:
+            rs2 = Registers.random()
+        if imm is None:
+            imm = 0
+            if self.imm_gen:
+                imm = self.imm_gen()
+
+        # Special handling for certain instructions
+        if self.name in ['ebreak', 'ecall']:
+            # These have no registers or immediates
+            rd = rs1 = rs2 = imm = 0
+        elif self.format == InstructionFormat.R:
+            # No immediate for R-type
+            imm = 0
+        elif self.format == InstructionFormat.U or self.format == InstructionFormat.J:
+            # Only rd and immediate
+            rs1 = rs2 = 0
+        elif self.format == InstructionFormat.I:
+            # Only rd, rs1, and immediate
+            rs2 = 0
+        elif self.format == InstructionFormat.S or self.format == InstructionFormat.B:
+            # Only rs1, rs2, and immediate
+            rd = 0
+
+        encoded = self.encode(rd, rs1, rs2, imm)
+        asm = self.assembly(rd, rs1, rs2, imm)
+        return encoded, asm
+
     def assembly(self, rd: int, rs1: int, rs2: int, imm: int) -> str:
         """Generate assembly string for this instruction."""
         if self.name in ['ebreak', 'ecall']:
@@ -194,11 +264,42 @@ class RISCVISA:
 
     def __init__(self, weights: Optional[Dict[str, float]] = None,
                  load_store_offset_min: int = -2048,
-                 load_store_offset_max: int = 2047):
-        if load_store_offset_min > load_store_offset_max:
-            raise ValueError(f"load_store_offset_min ({load_store_offset_min}) > load_store_offset_max ({load_store_offset_max})")
-        self.load_store_offset_min = load_store_offset_min
-        self.load_store_offset_max = load_store_offset_max
+                 load_store_offset_max: int = 2047,
+                 load_store_offset_ranges: Optional[List[Tuple[int, int]]] = None,
+                 rd_min: int = 0, rd_max: int = 31,
+                 rs1_min: int = 0, rs1_max: int = 31,
+                 rs2_min: int = 0, rs2_max: int = 31):
+        # Handle load/store offset ranges
+        if load_store_offset_ranges is not None:
+            # Validate ranges
+            self.load_store_offset_ranges = []
+            for base, size in load_store_offset_ranges:
+                if size <= 0:
+                    raise ValueError(f"Range size must be positive, got size={size} for base={base}")
+                self.load_store_offset_ranges.append((base, size))
+            # Compute overall min/max for backward compatibility
+            all_offsets = [base for base, size in self.load_store_offset_ranges]
+            self.load_store_offset_min = min(all_offsets)
+            self.load_store_offset_max = max(base + size - 1 for base, size in self.load_store_offset_ranges)
+        else:
+            # Use single range from min/max
+            if load_store_offset_min > load_store_offset_max:
+                raise ValueError(f"load_store_offset_min ({load_store_offset_min}) > load_store_offset_max ({load_store_offset_max})")
+            self.load_store_offset_min = load_store_offset_min
+            self.load_store_offset_max = load_store_offset_max
+            self.load_store_offset_ranges = [(load_store_offset_min, load_store_offset_max - load_store_offset_min + 1)]
+
+        # Validate and store register ranges
+        self._validate_register_range("rd", rd_min, rd_max)
+        self._validate_register_range("rs1", rs1_min, rs1_max)
+        self._validate_register_range("rs2", rs2_min, rs2_max)
+        self.rd_min = rd_min
+        self.rd_max = rd_max
+        self.rs1_min = rs1_min
+        self.rs1_max = rs1_max
+        self.rs2_min = rs2_min
+        self.rs2_max = rs2_max
+
         self.instructions: List[Instruction] = []
         self._load_instructions()
 
@@ -214,6 +315,52 @@ class RISCVISA:
                     self.weights[name] = weight
                 else:
                     raise ValueError(f"Unknown instruction '{name}' in weights")
+
+    def generate_load_store_offset(self) -> int:
+        """Generate a random load/store offset from configured ranges."""
+        # Randomly select a range
+        base, size = random.choice(self.load_store_offset_ranges)
+        # Generate offset within range [base, base + size - 1]
+        return random.randint(base, base + size - 1)
+
+    def _validate_register_range(self, reg_type: str, min_val: int, max_val: int):
+        """Validate register range parameters."""
+        if min_val < 0 or max_val > 31:
+            raise ValueError(f"{reg_type} range [{min_val}, {max_val}] must be within 0-31.")
+        if min_val > max_val:
+            raise ValueError(f"{reg_type} min ({min_val}) > max ({max_val})")
+
+    def get_random_rd(self, exclude_zero: bool = False) -> int:
+        """Return a random destination register within configured rd range."""
+        return Registers.random_range(self.rd_min, self.rd_max, exclude_zero=exclude_zero)
+
+    def get_random_rs1(self, exclude_zero: bool = False) -> int:
+        """Return a random source register 1 within configured rs1 range."""
+        return Registers.random_range(self.rs1_min, self.rs1_max, exclude_zero=exclude_zero)
+
+    def get_random_rs2(self, exclude_zero: bool = False) -> int:
+        """Return a random source register 2 within configured rs2 range."""
+        return Registers.random_range(self.rs2_min, self.rs2_max, exclude_zero=exclude_zero)
+
+    def generate_random_instruction(self, instr: Optional[Instruction] = None) -> Tuple[int, str]:
+        """Generate a random instruction using configured register ranges.
+
+        Args:
+            instr: Specific instruction to generate. If None, selects random instruction.
+
+        Returns:
+            (encoded_instruction, assembly_string)
+        """
+        if instr is None:
+            instr = self.get_random_instruction()
+
+        # Generate registers using configured ranges
+        rd = self.get_random_rd()
+        rs1 = self.get_random_rs1()
+        rs2 = self.get_random_rs2()
+
+        # Let instruction generate with these registers (it will handle format-specific zeroing)
+        return instr.generate_with_registers(rd=rd, rs1=rs1, rs2=rs2, imm=None)
 
     def _load_instructions(self):
         """Load common RV32I instructions."""
@@ -234,7 +381,7 @@ class RISCVISA:
         # I-type instructions (with immediates)
         def imm_12bit(): return random.randint(-2048, 2047)
         def imm_5bit(): return random.randint(0, 31)
-        def imm_load_store(): return random.randint(self.load_store_offset_min, self.load_store_offset_max)
+        imm_load_store = self.generate_load_store_offset
 
         self.instructions.extend([
             Instruction("addi", InstructionFormat.I, 0b0010011, 0b000, imm_gen=imm_12bit),
@@ -333,7 +480,7 @@ class RISCVISA:
         results = []
         for _ in range(count):
             instr = self.get_random_instruction()
-            encoded, asm = instr.generate_random()
+            encoded, asm = self.generate_random_instruction(instr)
             results.append((encoded, asm))
         return results
 
