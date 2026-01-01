@@ -254,11 +254,90 @@ python -m generator --config config.yaml
 
 ## Project Structure
 
-- `riscv_isa.py`: Core classes for RISC-V instruction formats and encoding
-- `generator.py`: Command-line interface and main generator logic
-- `__main__.py`: Module entry point
+The project follows a modular package structure under `src/`:
+
+```
+src/riscv_rtg/
+├── isa/                    # Core ISA definitions and classes
+│   ├── riscv_isa.py       # Instruction classes and RISCVISA
+│   └── definitions/       # Unified YAML instruction definitions
+├── generator/             # CLI and pattern generation
+│   ├── cli.py            # Command-line interface (formerly generator.py)
+│   ├── patterns.py       # Pattern-based sequence generation
+│   └── sequence_patterns.py
+├── constraints/           # ISA constraint system (moved from isa_constraint/)
+└── utils/                # Utility functions
+```
+
+**Top-level files**:
 - `setup.py`: Package installation configuration
-- `tests/`: Unit tests (to be added)
+- `__main__.py`: Module entry point (`python -m generator`)
+- `README.md`, `CLAUDE.md`: Documentation
+- `tests/`: Unit tests
+- `examples/`: Usage examples
+
+**Unified ISA Definitions**: Instruction definitions are now stored in YAML format as a single source of truth, matching the shader system's `riscv_isa.h` header.
+
+## Shader System Integration
+
+The project includes tools for generating C++ code from YAML definitions, enabling integration with the shader system:
+
+### C++ Code Generation
+```bash
+# Generate C++ headers and source files
+python3 scripts/generate_cpp.py
+
+# Files are generated in `generated/` directory:
+# - riscv_isa_generated.h: Instruction metadata and lookup tables
+# - riscv_isa_generated.cpp: Static data definitions
+```
+
+### Integration with Shader System
+1. **Copy generated files** to shader system's include directory:
+   ```bash
+   cp generated/riscv_isa_generated.h ../shader_system/generated/
+   cp generated/riscv_isa_generated.cpp ../shader_system/generated/
+   ```
+
+2. **Include in shader system build** by adding to CMakeLists.txt:
+   ```cmake
+   include_directories(${CMAKE_SOURCE_DIR}/generated)
+   ```
+
+3. **Use in C++ code**:
+   ```cpp
+   #include "riscv_isa_generated.h"
+
+   // Look up instruction metadata
+   auto* meta = shader_system::getInstructionMetadata(opcode, funct3, funct7);
+   if (meta) {
+       std::cout << "Instruction: " << meta->mnemonic << std::endl;
+   }
+   ```
+
+### Generating Test Programs
+Use the Python generator to create test vectors for shader system verification:
+```python
+# See examples/shader_system_integration.py
+from riscv_rtg.isa.riscv_isa import RISCVISA
+
+isa = RISCVISA()
+instructions = isa.generate_random(100)  # Generate 100 random instructions
+
+# Export as C++ array
+for encoded, asm in instructions:
+    print(f"0x{encoded:08x},  // {asm}")
+```
+
+### Verification
+Run integration tests to ensure consistency:
+```bash
+# Run all unit tests
+PYTHONPATH=src python3 -m unittest discover tests -v
+
+# Run shader system integration test
+python3 generated/test_shader_integration.py
+```
 
 ## Supported Instructions
 
@@ -296,7 +375,7 @@ The project includes an extensible constraint system for controlling instruction
 - **Individual instruction constraints**: Control register usage, immediate ranges, and probabilities
 - **Instruction groups**: Apply constraints to groups of related instructions
 - **YAML configuration**: Define constraints in human-readable YAML files
-- **Examples**: See `isa_constraint/` directory for templates and examples
+- **Examples**: See `src/riscv_rtg/constraints/` directory for templates and examples
 
 ### Sequence Patterns (New Feature)
 Define multi-instruction sequences with register dependencies:
@@ -304,7 +383,7 @@ Define multi-instruction sequences with register dependencies:
 ```bash
 # Generate using sequence patterns
 python3 -m generator --pattern sequence \
-  --sequence-patterns-file isa_constraint/sequence_patterns.yaml \
+  --sequence-patterns-file src/riscv_rtg/constraints/sequence_patterns.yaml \
   --sequence-patterns load_use,compute_store \
   --sequence-density 0.7 \
   -n 20 -f asm
@@ -323,7 +402,7 @@ python3 -m generator --pattern sequence \
 - `address_calc`: PC-relative address calculation (`auipc` + `addi`)
 - `compare_branch`: Compare registers → conditional branch
 
-See `isa_constraint/README.md` for detailed documentation.
+See `src/riscv_rtg/constraints/README.md` for detailed documentation.
 
 ## Claude Code Integration
 

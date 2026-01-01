@@ -5,9 +5,12 @@ Core classes for RISC-V instruction formats and random generation.
 """
 
 import random
+import os
+import yaml
 import struct
 from enum import Enum
 from typing import List, Tuple, Optional, Dict, Any
+from .enums import RiscvOpcode, RiscvFunct3, RiscvFunct7, RiscvInstructionType, INSTRUCTION_FORMAT_TO_TYPE
 
 
 class Registers(Enum):
@@ -363,80 +366,64 @@ class RISCVISA:
         return instr.generate_with_registers(rd=rd, rs1=rs1, rs2=rs2, imm=None)
 
     def _load_instructions(self):
-        """Load common RV32I instructions."""
-        # R-type instructions
-        self.instructions.extend([
-            Instruction("add", InstructionFormat.R, 0b0110011, 0b000, 0b0000000),
-            Instruction("sub", InstructionFormat.R, 0b0110011, 0b000, 0b0100000),
-            Instruction("xor", InstructionFormat.R, 0b0110011, 0b100, 0b0000000),
-            Instruction("or", InstructionFormat.R, 0b0110011, 0b110, 0b0000000),
-            Instruction("and", InstructionFormat.R, 0b0110011, 0b111, 0b0000000),
-            Instruction("sll", InstructionFormat.R, 0b0110011, 0b001, 0b0000000),
-            Instruction("srl", InstructionFormat.R, 0b0110011, 0b101, 0b0000000),
-            Instruction("sra", InstructionFormat.R, 0b0110011, 0b101, 0b0100000),
-            Instruction("slt", InstructionFormat.R, 0b0110011, 0b010, 0b0000000),
-            Instruction("sltu", InstructionFormat.R, 0b0110011, 0b011, 0b0000000),
-        ])
+        """Load RV32I instructions from unified YAML definitions."""
+        yaml_path = os.path.join(os.path.dirname(__file__), 'definitions', 'rv32i.yaml')
+        with open(yaml_path, 'r') as f:
+            data = yaml.safe_load(f)
 
-        # I-type instructions (with immediates)
-        def imm_12bit(): return random.randint(-2048, 2047)
-        def imm_5bit(): return random.randint(0, 31)
-        imm_load_store = self.generate_load_store_offset
+        # Build mapping from enum names to values
+        opcode_map = {name: value for name, value in data['enums']['opcode'].items()}
+        funct3_map = {name: value for name, value in data['enums']['funct3'].items()}
+        funct7_map = {name: value for name, value in data['enums']['funct7'].items()}
 
-        self.instructions.extend([
-            Instruction("addi", InstructionFormat.I, 0b0010011, 0b000, imm_gen=imm_12bit),
-            Instruction("xori", InstructionFormat.I, 0b0010011, 0b100, imm_gen=imm_12bit),
-            Instruction("ori", InstructionFormat.I, 0b0010011, 0b110, imm_gen=imm_12bit),
-            Instruction("andi", InstructionFormat.I, 0b0010011, 0b111, imm_gen=imm_12bit),
-            Instruction("slli", InstructionFormat.I, 0b0010011, 0b001, imm_gen=imm_5bit),
-            Instruction("srli", InstructionFormat.I, 0b0010011, 0b101, 0b0000000, imm_gen=imm_5bit),
-            Instruction("srai", InstructionFormat.I, 0b0010011, 0b101, 0b0100000, imm_gen=imm_5bit),
-            Instruction("slti", InstructionFormat.I, 0b0010011, 0b010, imm_gen=imm_12bit),
-            Instruction("sltiu", InstructionFormat.I, 0b0010011, 0b011, imm_gen=imm_12bit),
-            Instruction("lb", InstructionFormat.I, 0b0000011, 0b000, imm_gen=imm_load_store),
-            Instruction("lh", InstructionFormat.I, 0b0000011, 0b001, imm_gen=imm_load_store),
-            Instruction("lw", InstructionFormat.I, 0b0000011, 0b010, imm_gen=imm_load_store),
-            Instruction("lbu", InstructionFormat.I, 0b0000011, 0b100, imm_gen=imm_load_store),
-            Instruction("lhu", InstructionFormat.I, 0b0000011, 0b101, imm_gen=imm_load_store),
-            Instruction("jalr", InstructionFormat.I, 0b1100111, 0b000, imm_gen=imm_12bit),
-        ])
+        # Map format string to InstructionFormat
+        format_map = {
+            'R_TYPE': InstructionFormat.R,
+            'I_TYPE': InstructionFormat.I,
+            'S_TYPE': InstructionFormat.S,
+            'B_TYPE': InstructionFormat.B,
+            'U_TYPE': InstructionFormat.U,
+            'J_TYPE': InstructionFormat.J,
+        }
 
-        # S-type instructions
-        self.instructions.extend([
-            Instruction("sb", InstructionFormat.S, 0b0100011, 0b000, imm_gen=imm_load_store),
-            Instruction("sh", InstructionFormat.S, 0b0100011, 0b001, imm_gen=imm_load_store),
-            Instruction("sw", InstructionFormat.S, 0b0100011, 0b010, imm_gen=imm_load_store),
-        ])
+        for instr_def in data['instructions']:
+            mnemonic = instr_def['mnemonic']
+            fmt_str = instr_def['format']
+            fmt = format_map[fmt_str]
 
-        # B-type instructions
-        def imm_branch(): return random.randint(-4096, 4094) & ~1  # align to 2 bytes
-        self.instructions.extend([
-            Instruction("beq", InstructionFormat.B, 0b1100011, 0b000, imm_gen=imm_branch),
-            Instruction("bne", InstructionFormat.B, 0b1100011, 0b001, imm_gen=imm_branch),
-            Instruction("blt", InstructionFormat.B, 0b1100011, 0b100, imm_gen=imm_branch),
-            Instruction("bge", InstructionFormat.B, 0b1100011, 0b101, imm_gen=imm_branch),
-            Instruction("bltu", InstructionFormat.B, 0b1100011, 0b110, imm_gen=imm_branch),
-            Instruction("bgeu", InstructionFormat.B, 0b1100011, 0b111, imm_gen=imm_branch),
-        ])
+            # Resolve opcode, funct3, funct7
+            opcode = opcode_map[instr_def['opcode']]
+            funct3 = funct3_map.get(instr_def.get('funct3')) if instr_def.get('funct3') else None
+            funct7 = funct7_map.get(instr_def.get('funct7')) if instr_def.get('funct7') else None
 
-        # U-type instructions
-        def imm_20bit(): return random.randint(-524288, 524287)  # 20-bit signed
-        self.instructions.extend([
-            Instruction("lui", InstructionFormat.U, 0b0110111, imm_gen=imm_20bit),
-            Instruction("auipc", InstructionFormat.U, 0b0010111, imm_gen=imm_20bit),
-        ])
+            # Immediate generator
+            imm_spec = instr_def.get('immediate')
+            imm_gen = None
+            if imm_spec is not None:
+                bits = imm_spec['bits']
+                signed = imm_spec.get('signed', False)
+                align = imm_spec.get('align', 1)
+                range_spec = imm_spec.get('range')
+                if range_spec:
+                    min_val, max_val = range_spec
+                else:
+                    if signed:
+                        min_val = -(1 << (bits - 1))
+                        max_val = (1 << (bits - 1)) - 1
+                    else:
+                        min_val = 0
+                        max_val = (1 << bits) - 1
+                # Create closure with captured values
+                def make_imm_gen(min_val, max_val, align):
+                    def imm_gen_func():
+                        val = random.randint(min_val, max_val)
+                        if align > 1:
+                            val = val & ~(align - 1)
+                        return val
+                    return imm_gen_func
+                imm_gen = make_imm_gen(min_val, max_val, align)
 
-        # J-type instructions
-        def imm_jump(): return random.randint(-1048576, 1048574) & ~1  # align to 2 bytes
-        self.instructions.extend([
-            Instruction("jal", InstructionFormat.J, 0b1101111, imm_gen=imm_jump),
-        ])
-
-        # Special instructions
-        self.instructions.extend([
-            Instruction("ecall", InstructionFormat.I, 0b1110011, 0b000),
-            Instruction("ebreak", InstructionFormat.I, 0b1110011, 0b000, 0b0000001),
-        ])
+            self.instructions.append(Instruction(mnemonic, fmt, opcode, funct3, funct7, imm_gen=imm_gen))
 
     def get_random_instruction(self) -> Instruction:
         """Return a random instruction from the ISA using weighted selection."""

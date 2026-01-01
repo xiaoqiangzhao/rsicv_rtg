@@ -8,9 +8,9 @@ import tempfile
 import os
 import argparse
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
-from generator import load_config, validate_and_convert_config, merge_config_with_args
+from riscv_rtg.generator.cli import load_config, validate_and_convert_config, merge_config_with_args
 
 
 class TestConfigLoading(unittest.TestCase):

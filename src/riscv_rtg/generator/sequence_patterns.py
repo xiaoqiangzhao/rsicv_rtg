@@ -7,8 +7,8 @@ Extends the constraint system to define multi-instruction patterns.
 import random
 import yaml
 from typing import List, Tuple, Optional, Dict, Any, Union
-from riscv_isa import RISCVISA, Instruction, InstructionFormat, Registers
-from patterns import PatternGenerator, SemanticState, CommentGenerator
+from riscv_rtg.isa.riscv_isa import RISCVISA, Instruction, InstructionFormat, Registers
+from .patterns import PatternGenerator, SemanticState, CommentGenerator
 
 
 class SequenceStep:

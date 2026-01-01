@@ -7,9 +7,9 @@ import os
 import sys
 
 # Add parent directory to path so we can import riscv_isa
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
-from riscv_isa import RISCVISA, InstructionFormat, format_hex, format_binary
+from riscv_rtg.isa.riscv_isa import RISCVISA, InstructionFormat, format_hex, format_binary
 
 
 def example1():

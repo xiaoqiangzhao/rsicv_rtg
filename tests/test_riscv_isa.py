@@ -5,7 +5,10 @@ Unit tests for RISC-V ISA generator.
 
 import unittest
 import random
-from riscv_isa import RISCVISA, InstructionFormat, Registers, format_binary, format_hex
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+from riscv_rtg.isa.riscv_isa import RISCVISA, InstructionFormat, Registers, format_binary, format_hex
 
 
 class TestRISCVISA(unittest.TestCase):
@@ -164,7 +167,7 @@ class TestInstructionFormats(unittest.TestCase):
 
     def test_r_type_encoding(self):
         """Test R-type encoding."""
-        from riscv_isa import Instruction
+        from riscv_rtg.isa.riscv_isa import Instruction
         instr = Instruction("add", InstructionFormat.R, 0b0110011, 0b000, 0b0000000)
         # add x1, x2, x3
         encoded = instr.encode(rd=1, rs1=2, rs2=3, imm=0)
@@ -174,7 +177,7 @@ class TestInstructionFormats(unittest.TestCase):
 
     def test_i_type_encoding(self):
         """Test I-type encoding."""
-        from riscv_isa import Instruction
+        from riscv_rtg.isa.riscv_isa import Instruction
         instr = Instruction("addi", InstructionFormat.I, 0b0010011, 0b000)
         # addi x1, x2, 0x123
         encoded = instr.encode(rd=1, rs1=2, rs2=0, imm=0x123)
@@ -184,7 +187,7 @@ class TestInstructionFormats(unittest.TestCase):
 
     def test_s_type_encoding(self):
         """Test S-type encoding."""
-        from riscv_isa import Instruction
+        from riscv_rtg.isa.riscv_isa import Instruction
         instr = Instruction("sw", InstructionFormat.S, 0b0100011, 0b010)
         # sw x3, 0x44(x2)
         encoded = instr.encode(rd=0, rs1=2, rs2=3, imm=0x44)

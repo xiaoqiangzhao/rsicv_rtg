@@ -6,7 +6,7 @@ Implements common instruction patterns and data hazards.
 
 import random
 from typing import List, Tuple, Optional, Dict, Any
-from riscv_isa import RISCVISA, Instruction, InstructionFormat, Registers
+from riscv_rtg.isa.riscv_isa import RISCVISA, Instruction, InstructionFormat, Registers
 
 
 class SemanticState:

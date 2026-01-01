@@ -8,9 +8,9 @@ import random
 import sys
 import yaml
 from typing import List, Tuple, Optional
-from riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
-from patterns import PatternGenerator, SemanticState, CommentGenerator
-from sequence_patterns import SequencePatternLoader, SequencePatternGenerator
+from riscv_rtg.isa.riscv_isa import RISCVISA, InstructionFormat, format_binary, format_hex
+from .patterns import PatternGenerator, SemanticState, CommentGenerator
+from .sequence_patterns import SequencePatternLoader, SequencePatternGenerator
 
 
 def parse_load_store_ranges(ranges_spec: Optional[str]) -> Optional[List[Tuple[int, int]]]:

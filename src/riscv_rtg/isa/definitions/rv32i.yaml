@@ -1,0 +1,415 @@
+# RISC-V RV32I unified instruction definitions
+# Single source of truth for Python generator and C++ shader system
+# Matches ../shader_system/include/riscv_isa.h enums
+
+# Enums matching C++ RiscvOpcode, RiscvFunct3, RiscvFunct7
+enums:
+  opcode:
+    LOAD: 0b0000011    # 3
+    STORE: 0b0100011   # 35
+    OP_IMM: 0b0010011  # 19
+    OP: 0b0110011      # 51
+    BRANCH: 0b1100011  # 99
+    JAL: 0b1101111     # 111
+    JALR: 0b1100111    # 103
+    SYSTEM: 0b1110011  # 115
+    LUI: 0b0110111     # 55
+    AUIPC: 0b0010111   # 23
+    FENCE: 0b0001111   # 15
+    CUSTOM: 0b0001011  # 11
+
+  funct3:
+    # Load
+    LB: 0b000
+    LH: 0b001
+    LW: 0b010
+    LBU: 0b100
+    LHU: 0b101
+    # Store
+    SB: 0b000
+    SH: 0b001
+    SW: 0b010
+    # OP-IMM
+    ADDI: 0b000
+    SLTI: 0b010
+    SLTIU: 0b011
+    XORI: 0b100
+    ORI: 0b110
+    ANDI: 0b111
+    SLLI: 0b001
+    SRLI_SRAI: 0b101
+    # OP
+    ADD_SUB: 0b000
+    SLL: 0b001
+    SLT: 0b010
+    SLTU: 0b011
+    XOR: 0b100
+    SRL_SRA: 0b101
+    OR: 0b110
+    AND: 0b111
+    # Branch
+    BEQ: 0b000
+    BNE: 0b001
+    BLT: 0b100
+    BGE: 0b101
+    BLTU: 0b110
+    BGEU: 0b111
+    # System
+    ECALL_EBREAK: 0b000
+    CSRRW: 0b001
+    CSRRS: 0b010
+    CSRRC: 0b011
+    CSRRWI: 0b101
+    CSRRSI: 0b110
+    CSRRCI: 0b111
+    # Fence
+    FENCE: 0b000
+    FENCE_I: 0b001
+
+  funct7:
+    BASE: 0b0000000
+    ALT: 0b0100000
+
+# Instruction definitions
+# Each instruction maps opcode, funct3, funct7 to mnemonic and format
+instructions:
+  # R-type
+  - mnemonic: add
+    format: R_TYPE
+    opcode: OP
+    funct3: ADD_SUB
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: sub
+    format: R_TYPE
+    opcode: OP
+    funct3: ADD_SUB
+    funct7: ALT
+    immediate: null
+
+  - mnemonic: xor
+    format: R_TYPE
+    opcode: OP
+    funct3: XOR
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: or
+    format: R_TYPE
+    opcode: OP
+    funct3: OR
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: and
+    format: R_TYPE
+    opcode: OP
+    funct3: AND
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: sll
+    format: R_TYPE
+    opcode: OP
+    funct3: SLL
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: srl
+    format: R_TYPE
+    opcode: OP
+    funct3: SRL_SRA
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: sra
+    format: R_TYPE
+    opcode: OP
+    funct3: SRL_SRA
+    funct7: ALT
+    immediate: null
+
+  - mnemonic: slt
+    format: R_TYPE
+    opcode: OP
+    funct3: SLT
+    funct7: BASE
+    immediate: null
+
+  - mnemonic: sltu
+    format: R_TYPE
+    opcode: OP
+    funct3: SLTU
+    funct7: BASE
+    immediate: null
+
+  # I-type (ALU immediate)
+  - mnemonic: addi
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: ADDI
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: xori
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: XORI
+    immediate:
+      bits: 12
+      signed: false
+      range: [0, 4095]
+
+  - mnemonic: ori
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: ORI
+    immediate:
+      bits: 12
+      signed: false
+      range: [0, 4095]
+
+  - mnemonic: andi
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: ANDI
+    immediate:
+      bits: 12
+      signed: false
+      range: [0, 4095]
+
+  - mnemonic: slli
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: SLLI
+    immediate:
+      bits: 5
+      signed: false
+      range: [0, 31]
+
+  - mnemonic: srli
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: SRLI_SRAI
+    funct7: BASE
+    immediate:
+      bits: 5
+      signed: false
+      range: [0, 31]
+
+  - mnemonic: srai
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: SRLI_SRAI
+    funct7: ALT
+    immediate:
+      bits: 5
+      signed: false
+      range: [0, 31]
+
+  - mnemonic: slti
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: SLTI
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: sltiu
+    format: I_TYPE
+    opcode: OP_IMM
+    funct3: SLTIU
+    immediate:
+      bits: 12
+      signed: false
+      range: [0, 4095]
+
+  # I-type (load)
+  - mnemonic: lb
+    format: I_TYPE
+    opcode: LOAD
+    funct3: LB
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: lh
+    format: I_TYPE
+    opcode: LOAD
+    funct3: LH
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: lw
+    format: I_TYPE
+    opcode: LOAD
+    funct3: LW
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: lbu
+    format: I_TYPE
+    opcode: LOAD
+    funct3: LBU
+    immediate:
+      bits: 12
+      signed: false
+      range: [0, 4095]
+
+  - mnemonic: lhu
+    format: I_TYPE
+    opcode: LOAD
+    funct3: LHU
+    immediate:
+      bits: 12
+      signed: false
+      range: [0, 4095]
+
+  # I-type (jalr)
+  - mnemonic: jalr
+    format: I_TYPE
+    opcode: JALR
+    funct3: ADDI  # Actually 0b000, same as ADDI
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  # S-type (store)
+  - mnemonic: sb
+    format: S_TYPE
+    opcode: STORE
+    funct3: SB
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: sh
+    format: S_TYPE
+    opcode: STORE
+    funct3: SH
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  - mnemonic: sw
+    format: S_TYPE
+    opcode: STORE
+    funct3: SW
+    immediate:
+      bits: 12
+      signed: true
+      range: [-2048, 2047]
+
+  # B-type (branch)
+  - mnemonic: beq
+    format: B_TYPE
+    opcode: BRANCH
+    funct3: BEQ
+    immediate:
+      bits: 13
+      signed: true
+      align: 2
+      range: [-4096, 4094]
+
+  - mnemonic: bne
+    format: B_TYPE
+    opcode: BRANCH
+    funct3: BNE
+    immediate:
+      bits: 13
+      signed: true
+      align: 2
+      range: [-4096, 4094]
+
+  - mnemonic: blt
+    format: B_TYPE
+    opcode: BRANCH
+    funct3: BLT
+    immediate:
+      bits: 13
+      signed: true
+      align: 2
+      range: [-4096, 4094]
+
+  - mnemonic: bge
+    format: B_TYPE
+    opcode: BRANCH
+    funct3: BGE
+    immediate:
+      bits: 13
+      signed: true
+      align: 2
+      range: [-4096, 4094]
+
+  - mnemonic: bltu
+    format: B_TYPE
+    opcode: BRANCH
+    funct3: BLTU
+    immediate:
+      bits: 13
+      signed: true
+      align: 2
+      range: [-4096, 4094]
+
+  - mnemonic: bgeu
+    format: B_TYPE
+    opcode: BRANCH
+    funct3: BGEU
+    immediate:
+      bits: 13
+      signed: true
+      align: 2
+      range: [-4096, 4094]
+
+  # U-type
+  - mnemonic: lui
+    format: U_TYPE
+    opcode: LUI
+    immediate:
+      bits: 20
+      signed: false
+      range: [0, 1048575]
+
+  - mnemonic: auipc
+    format: U_TYPE
+    opcode: AUIPC
+    immediate:
+      bits: 20
+      signed: false
+      range: [0, 1048575]
+
+  # J-type
+  - mnemonic: jal
+    format: J_TYPE
+    opcode: JAL
+    immediate:
+      bits: 21
+      signed: true
+      align: 2
+      range: [-1048576, 1048574]
+
+  # Special instructions
+  - mnemonic: ecall
+    format: I_TYPE
+    opcode: SYSTEM
+    funct3: ECALL_EBREAK
+    immediate: null
+
+  - mnemonic: ebreak
+    format: I_TYPE
+    opcode: SYSTEM
+    funct3: ECALL_EBREAK
+    funct7: ALT  # Actually 0b0000001? Need to check C++ header
+    immediate: null

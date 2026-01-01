@@ -12,21 +12,22 @@ The project follows a modular architecture with clear separation of concerns:
 
 ### Core Components
 
-1. **`riscv_isa.py`** - Foundation layer
+1. **`isa/` module** - Foundation layer
    - `Instruction` base class for all RISC-V instructions
    - `RISCVISA` class manages instruction set and random generation
-   - `InstructionFormat` enum (R, I, S, B, U, J)
+   - `InstructionFormat` enum (R, I, S, B, U, J) matching C++ `RiscvInstructionType`
    - `Registers` enum (x0-x31)
+   - Unified YAML instruction definitions in `isa/definitions/`
    - Handles instruction encoding/decoding for all formats
 
-2. **`generator.py`** - Application layer
+2. **`generator/cli.py`** - Application layer
    - CLI interface with argparse
    - Configuration file loading (YAML via PyYAML)
    - Output formatting (hex, bin, asm, hexasm, all)
    - Weighted random generation control
    - PC comment generation
 
-3. **`patterns.py`** - Advanced features layer
+3. **`generator/patterns.py`** - Advanced features layer
    - `SemanticState` class tracks register/memory state
    - `PatternGenerator` class generates instruction patterns
    - `CommentGenerator` class adds semantic comments
@@ -34,13 +35,33 @@ The project follows a modular architecture with clear separation of concerns:
 
 4. **`__main__.py`** - Entry point wrapper to `generator.main()`
 
+5. **`scripts/generate_cpp.py`** - C++ code generation layer
+   - Generates C++ headers and source files from YAML definitions
+   - Creates `riscv_isa_generated.h` and `riscv_isa_generated.cpp`
+   - Ensures consistency between Python generator and shader system
+   - Enables integration with the shader system's `riscv_isa.h`
+
 ### Component Relationships
 ```
-CLI (generator.py) → RISCVISA (riscv_isa.py) → Instruction objects
-                    ↓
-              PatternGenerator (patterns.py)
-                    ↓
-              Output Formatters
+Unified YAML Definitions (isa/definitions/rv32i.yaml)
+        ↗                               ↖
+       ↗                                 ↖
+      ↗                                   ↖
+     ↗                                     ↖
+    ↗                                       ↖
+   ↗                                         ↖
+  ↗                                           ↖
+ ↗                                             ↖
+↗                                               ↖
+RISCVISA (Python)                          generate_cpp.py (C++ generator)
+    ↓                                           ↓
+Instruction objects                       C++ headers/source
+    ↓                                           ↓
+CLI (generator/cli.py)                     Shader System
+    ↓
+PatternGenerator (generator/patterns.py)
+    ↓
+Output Formatters
 ```
 
 ## Development Commands
@@ -64,6 +85,20 @@ python -m unittest discover tests
 
 # Run specific test file
 python -m pytest tests/test_riscv_isa.py
+```
+
+### C++ Code Generation
+```bash
+# Generate C++ headers and source from YAML definitions
+python3 scripts/generate_cpp.py
+
+# Generated files:
+# - generated/riscv_isa_generated.h: Instruction metadata and lookup tables
+# - generated/riscv_isa_generated.cpp: Static data definitions
+# - generated/test_consistency.py: Python verification test
+
+# Test shader system integration
+python3 generated/test_shader_integration.py
 ```
 
 ### Common Development Tasks
@@ -102,7 +137,7 @@ python -m generator --pattern raw --semantic-correlation --semantic-comments
 
 ## Skills
 
-The project includes bash skill scripts for common operations in `.claude/skills/`. These can be invoked directly or referenced in Claude Code interactions.
+The project includes bash skill scripts for common operations in `.claude/skills/`. These can be invoked directly or referenced in Claude Code interactions. Note: The constraint system has moved to `src/riscv_rtg/constraints/`.
 
 ### Available Skills
 
@@ -177,7 +212,7 @@ Key configuration options:
 
 ## Pattern Generation System
 
-The pattern system in `patterns.py` enables sophisticated instruction sequences:
+The pattern system in `generator/patterns.py` enables sophisticated instruction sequences:
 
 ### Pattern Types
 - `load-store`: Memory access patterns with address ranges
@@ -196,19 +231,19 @@ The pattern system in `patterns.py` enables sophisticated instruction sequences:
 ## Adding New Features
 
 ### To add a new instruction format:
-1. Add to `InstructionFormat` enum in `riscv_isa.py`
+1. Add to `InstructionFormat` enum in `isa/riscv_isa.py`
 2. Update `Instruction` class encoding/decoding methods
 3. Add instruction definitions in `RISCVISA.__init__()`
 4. Update tests in `tests/test_riscv_isa.py`
 
 ### To add a new pattern:
-1. Add pattern method to `PatternGenerator` class in `patterns.py`
-2. Update pattern selection logic in `generator.py`
+1. Add pattern method to `PatternGenerator` class in `generator/patterns.py`
+2. Update pattern selection logic in `generator/cli.py`
 3. Add CLI argument handling if needed
 4. Update configuration file parsing
 
 ### To add a new output format:
-1. Add format constant in `generator.py`
+1. Add format constant in `generator/cli.py`
 2. Implement formatting function
 3. Update `format_instruction()` function
 4. Update CLI argument validation
@@ -239,7 +274,7 @@ The pattern system in `patterns.py` enables sophisticated instruction sequences:
 ## Entry Points
 
 - **CLI**: `riscv-rtg` (after installation) or `python -m generator`
-- **API**: Import `RISCVISA` from `riscv_isa` for programmatic use
+- **API**: Import `RISCVISA` from `riscv_rtg.isa.riscv_isa` for programmatic use
 - **Examples**: See `examples/basic_usage.py` for API usage
 
 ## File Organization Principles

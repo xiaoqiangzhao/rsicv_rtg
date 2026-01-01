@@ -6,10 +6,10 @@ Unit tests for semantic correlation features.
 import unittest
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
-from patterns import SemanticState, CommentGenerator, PatternGenerator
-from riscv_isa import RISCVISA, InstructionFormat, Registers
+from riscv_rtg.generator.patterns import SemanticState, CommentGenerator, PatternGenerator
+from riscv_rtg.isa.riscv_isa import RISCVISA, InstructionFormat, Registers
 
 
 class TestSemanticState(unittest.TestCase):
