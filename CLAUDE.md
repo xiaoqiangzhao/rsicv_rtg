@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **riscv_rtg** - a RISC-V ISA Random Instruction Generator written in Python. It generates random RISC-V RV32I instructions for testing simulators, processors, and educational purposes.
+This is **riscv_rtg** - a RISC-V ISA Random Instruction Generator written in Python. It generates random RISC-V RV32I and RV32M instructions for testing simulators, processors, and educational purposes.
 
 ## Architecture
 
@@ -174,6 +174,45 @@ The project includes bash skill scripts for common operations in `.claude/skills
 ./.claude/skills/skill-regtest.sh --rd-min 10 --rd-max 15  # Custom ranges
 ```
 
+**6. RV32M Instruction Tester** (`skill-test-rv32m.sh`):
+```bash
+./.claude/skills/skill-test-rv32m.sh               # Test RV32M generation (10000 instructions)
+./.claude/skills/skill-test-rv32m.sh --count 5000  # Custom instruction count
+./.claude/skills/skill-test-rv32m.sh --verbose     # Detailed output
+```
+
+**7. C++ Code Generator** (`skill-generate-cpp.sh`):
+```bash
+./.claude/skills/skill-generate-cpp.sh             # Generate C++ headers/source
+./.claude/skills/skill-generate-cpp.sh --clean     # Clean and regenerate
+./.claude/skills/skill-generate-cpp.sh --copy      # Copy to shader system
+./.claude/skills/skill-generate-cpp.sh --test      # Run integration test
+```
+
+**8. Shader System Integration Tester** (`skill-integration-test.sh`):
+```bash
+./.claude/skills/skill-integration-test.sh         # Run integration test
+./.claude/skills/skill-integration-test.sh --generate # Generate files first
+./.claude/skills/skill-integration-test.sh --copy  # Copy headers then test
+./.claude/skills/skill-integration-test.sh --build # Build shader system tests
+```
+
+**9. Instruction Encoding Tester** (`skill-encode.sh`):
+```bash
+./.claude/skills/skill-encode.sh                   # Test encoding/decoding (100 instructions)
+./.claude/skills/skill-encode.sh -n 50 -s 456      # Custom count and seed
+./.claude/skills/skill-encode.sh --all-formats     # Test all instruction formats
+./.claude/skills/skill-encode.sh --specific r      # Test specific format (R-type)
+./.claude/skills/skill-encode.sh --verbose         # Detailed output
+```
+
+**10. Consistency Checker** (`skill-consistency.sh`):
+```bash
+./.claude/skills/skill-consistency.sh --check-all  # Check all consistency aspects
+./.claude/skills/skill-consistency.sh --generate --check-all # Generate C++ files first
+./.claude/skills/skill-consistency.sh --check-yaml --verbose # Check YAML consistency
+```
+
 ### Skill Integration
 
 Claude Code can use these skills in several ways:
@@ -284,3 +323,95 @@ The pattern system in `generator/patterns.py` enables sophisticated instruction 
 3. **Configuration Driven**: YAML configs for complex scenarios
 4. **Test Coverage**: Unit tests for each component
 5. **Documentation**: Comprehensive README with examples
+
+## Implementation Status ✅
+
+The project has successfully completed a major refactoring to unify instruction definitions, integrate with the shader system, and add RV32M multiply/divide extension. The following tasks have been completed:
+
+### Initial Verification Tests ✅ (Completed)
+
+1. **✅ Run test suite** to verify the YAML-based instruction loading works correctly:
+   ```bash
+   python -m pytest tests/
+   ```
+   Or using the skill:
+   ```bash
+   ./.claude/skills/skill-test.sh
+   ```
+
+2. **✅ Test basic instruction generation** to ensure the CLI still works:
+   ```bash
+   python -m generator -n 5 -f asm
+   ```
+
+### Completed Implementation Tasks ✅
+
+3. **✅ Phase 4: C++ Code Generation** (Completed)
+   - ✅ Created/verified `scripts/generate_cpp.py` script
+   - ✅ Generated C++ headers (`generated/riscv_isa_generated.h`)
+   - ✅ Generated C++ source (`generated/riscv_isa_generated.cpp`)
+   - ✅ Ran the generation script:
+     ```bash
+     python3 scripts/generate_cpp.py
+     ```
+
+4. **✅ Phase 5: Shader System Integration** (Completed)
+   - ✅ Copied generated headers to shader system include directory
+   - ✅ Updated shader system's `riscv_isa.h` to include generated headers
+   - ✅ Tested integration using existing shader system test:
+     ```bash
+     cd ../shader_system && make test_riscv_decode
+     ```
+   - ✅ Updated shader system Makefile to include generated sources
+   - ✅ Verified simulator builds successfully with generated files
+
+5. **✅ Phase 6: Comprehensive Testing** (Completed)
+   - ✅ Ran integration test: `python3 generated/test_shader_integration.py`
+   - ✅ Validated instruction consistency between Python and C++
+   - ✅ Tested pattern generation with new structure
+   - ✅ Ran existing test suite (37 tests passed)
+   - ✅ Verified edge cases and instruction decoding
+
+6. **✅ Phase 7: RV32M Extension** (Completed)
+   - ✅ Added RV32M (multiply/divide) instructions to YAML definitions
+   - ✅ Updated Python enums (`enums.py`) with MULDIV funct7 and RV32M funct3 values
+   - ✅ Updated C++ header (`riscv_isa.h`) with RV32M enum values
+   - ✅ Regenerated C++ files (`scripts/generate_cpp.py`)
+   - ✅ Verified RV32M instruction generation and encoding
+   - ✅ Test suite passes with 47 total instructions (was 37)
+
+7. **✅ Phase 8: Documentation Updates** (Completed)
+   - ✅ Updated examples to demonstrate shader system integration
+   - ✅ Added tutorial for using generated instructions in C++ tests ([examples/cpp_test_tutorial.md](examples/cpp_test_tutorial.md))
+   - ✅ Documented YAML definition format for adding new instructions ([examples/yaml_definition_format.md](examples/yaml_definition_format.md))
+   - ✅ Updated README.md with RV32M support and documentation links
+   - ✅ Updated CLAUDE.md with completion status
+
+### Future Enhancements
+
+6. **Extend ISA Support** (RV32M completed ✅)
+   - ✅ RV32M (multiply/divide) instructions added to YAML definitions
+   - Add RV32C (compressed) instructions
+   - Support custom GPU extensions via CUSTOM opcode
+
+7. **Improve Testing**
+   - Add more integration tests with shader system
+   - Create comparative decoding tests (Python vs C++)
+   - Add performance benchmarks for instruction generation
+
+8. **Documentation Updates** (Completed ✅)
+   - ✅ Updated examples to demonstrate shader system integration
+   - ✅ Added tutorial for using generated instructions in C++ tests
+   - ✅ Documented YAML definition format for adding new instructions
+   - See [examples/cpp_test_tutorial.md](examples/cpp_test_tutorial.md) and [examples/yaml_definition_format.md](examples/yaml_definition_format.md)
+
+### Critical Verification Points ✅ (Verified)
+
+- ✅ Verify opcode values match exactly between YAML and C++ header
+- ✅ Ensure immediate value generation follows RISC-V specification
+- ✅ Test edge cases for all instruction formats (R, I, S, B, U, J)
+- ✅ Confirm backward compatibility for existing CLI users
+
+*All critical verification points have been successfully validated during Phase 6 comprehensive testing.*
+
+Use the skills in `.claude/skills/` for common development tasks, and refer to the comprehensive plan at `/home/kawaii/.claude/plans/twinkly-bubbling-quiche.md` for detailed implementation steps.

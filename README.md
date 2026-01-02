@@ -339,11 +339,22 @@ PYTHONPATH=src python3 -m unittest discover tests -v
 python3 generated/test_shader_integration.py
 ```
 
+## Documentation
+
+Comprehensive documentation is available:
+
+- **[YAML Instruction Definition Format](examples/yaml_definition_format.md)** - Guide to adding new instructions via YAML definitions
+- **[C++ Test Tutorial](examples/cpp_test_tutorial.md)** - Tutorial for using generated instructions in C++ shader system tests
+- **[Shader System Integration Example](examples/shader_system_integration.py)** - Python example for generating test programs
+- **[Basic Usage Examples](examples/basic_usage.py)** - Basic Python API usage
+- **[CLAUDE.md](CLAUDE.md)** - Development guide and project instructions
+
 ## Supported Instructions
 
-Currently supports RV32I base instruction set:
+Currently supports RV32I base instruction set plus RV32M multiply/divide extension:
 
 - **R-type**: add, sub, xor, or, and, sll, srl, sra, slt, sltu
+- **RV32M R-type**: mul, mulh, mulhsu, mulhu, div, divu, rem, remu
 - **I-type**: addi, xori, ori, andi, slli, srli, srai, slti, sltiu, lb, lh, lw, lbu, lhu, jalr
 - **S-type**: sb, sh, sw
 - **B-type**: beq, bne, blt, bge, bltu, bgeu
@@ -353,15 +364,14 @@ Currently supports RV32I base instruction set:
 
 ## Limitations
 
-- Currently only supports RV32I (32-bit base integer ISA)
+- Currently supports RV32I plus RV32M multiply/divide extension (32-bit integer ISA)
 - No support for compressed instructions (RV32C)
-- No support for multiplication/division extension (M)
 - No support for floating-point extensions (F/D)
 - Simple random immediate generation (may produce unrealistic values)
 
 ## Future Extensions
 
-- Support for RV64I, RV32C, RV32M extensions
+- Support for RV64I, RV32C extensions
 - More sophisticated immediate generation (e.g., aligned addresses)
 - Weighted instruction distribution
 - Basic block generation
@@ -414,6 +424,11 @@ This project includes Claude Code integration with skill scripts for common oper
 - **Instruction Lister**: List available instructions with `./.claude/skills/skill-list.sh`
 - **Configuration Validator**: Validate config files with `./.claude/skills/skill-validate.sh`
 - **Register Range Tester**: Test register range control with `./.claude/skills/skill-regtest.sh`
+- **RV32M Tester**: Test RV32M multiply/divide instruction generation with `./.claude/skills/skill-test-rv32m.sh`
+- **C++ Code Generator**: Generate C++ headers/source from YAML definitions with `./.claude/skills/skill-generate-cpp.sh`
+- **Shader System Integration Tester**: Test shader system integration with `./.claude/skills/skill-integration-test.sh`
+- **Instruction Encoding Tester**: Test instruction encoding/decoding with `./.claude/skills/skill-encode.sh`
+- **Consistency Checker**: Check consistency between Python and C++ definitions with `./.claude/skills/skill-consistency.sh`
 
 See [CLAUDE.md](CLAUDE.md) for detailed skill documentation and usage examples.
 

@@ -53,6 +53,15 @@ class RiscvFunct3(IntEnum):
     SRL_SRA   = 0b101
     OR        = 0b110
     AND       = 0b111
+    # Multiply/Divide extension (same funct3 values, different funct7)
+    MUL        = 0b000
+    MULH       = 0b001
+    MULHSU     = 0b010
+    MULHU      = 0b011
+    DIV        = 0b100
+    DIVU       = 0b101
+    REM        = 0b110
+    REMU       = 0b111
     # Branch
     BEQ       = 0b000
     BNE       = 0b001
@@ -77,6 +86,7 @@ class RiscvFunct7(IntEnum):
     """RISC-V instruction funct7 values matching C++ RiscvFunct7 enum."""
     BASE = 0b0000000
     ALT  = 0b0100000
+    MULDIV = 0b0000001
 
 
 class RiscvInstructionType(Enum):

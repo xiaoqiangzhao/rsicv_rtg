@@ -4,6 +4,9 @@ Shader System Integration Example
 
 This example shows how to use the RISC-V random instruction generator
 to create test programs for the shader system.
+
+Supports RV32I base instruction set plus RV32M multiply/divide extension.
+Generated instructions can be used directly in C++ shader system tests.
 """
 
 import os

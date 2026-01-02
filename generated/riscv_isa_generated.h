@@ -47,7 +47,7 @@ const RiscvInstructionMetadata* getInstructionMetadata(std::string_view mnemonic
 /**
  * @brief Total number of defined instructions.
  */
-constexpr size_t RISCV_INSTRUCTION_COUNT = 39;
+constexpr size_t RISCV_INSTRUCTION_COUNT = 47;
 
 /**
  * @brief Array of all instruction metadata.
